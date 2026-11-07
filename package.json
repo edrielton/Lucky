@@ -1,0 +1,22 @@
+{
+  "name": "lucky",
+  "version": "0.2.6",
+  "description": "Lucky — agente pessoal local com memória estruturada, aprendizagem auditável e autodesenvolvimento supervisionado",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node --experimental-strip-types --no-warnings src/cli.ts",
+    "test": "node --experimental-strip-types --test --no-warnings test/*.test.ts",
+    "selftest": "node --experimental-strip-types --no-warnings src/testing/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "bridge": "node --experimental-strip-types --no-warnings src/bridge/server.ts",
+    "qa": "node --experimental-strip-types --no-warnings src/testing/quality-cli.ts",
+    "verify:integrity": "node --experimental-strip-types --no-warnings scripts/verify-integrity.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.0"
+  }
+}
