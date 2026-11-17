@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Lucky para PC",
+  "version": "0.2.0",
+  "description": "Envia conteúdo de páginas ao Lucky local somente quando o usuário clicar.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:43127/*"
+  ],
+  "action": {
+    "default_title": "Enviar página ao Lucky",
+    "default_popup": "popup.html"
+  }
+}
