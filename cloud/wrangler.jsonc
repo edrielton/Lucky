@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lucky-cloud",
+  "main": "worker.ts",
+  "compatibility_date": "2026-11-17",
+  "assets": {
+    "directory": "../web",
+    "binding": "ASSETS"
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "lucky-cloud",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "database/migrations"
+    }
+  ]
+}

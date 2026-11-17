@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111827">
+  <title>Lucky Cloud</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <a class="brand" href="/">Lucky <span>Cloud</span></a>
+      <button id="logout" class="secondary hidden" type="button">Sair</button>
+    </header>
+    <p id="notice" class="notice" role="status" aria-live="polite"></p>
+    <section id="auth" class="panel auth-panel">
+      <h1>Acesse seu Lucky</h1>
+      <form id="auth-form">
+        <label>E-mail <input name="email" type="email" autocomplete="username" required maxlength="254"></label>
+        <label>Senha <input name="password" type="password" autocomplete="current-password" minlength="12" required maxlength="256"></label>
+        <div class="actions">
+          <button type="submit" data-mode="login">Entrar</button>
+          <button type="submit" data-mode="register" class="secondary">Criar conta</button>
+        </div>
+      </form>
+    </section>
+    <div id="app" class="hidden">
+      <section class="panel">
+        <h1>Converse com Lucky</h1>
+        <div id="chat" class="chat" aria-live="polite"></div>
+        <form id="chat-form" class="inline-form">
+          <label class="sr-only" for="chat-input">Mensagem</label>
+          <input id="chat-input" name="content" placeholder="O que você gostaria de fazer?" maxlength="8000" required>
+          <button type="submit">Enviar</button>
+        </form>
+      </section>
+      <section class="grid">
+        <section class="panel">
+          <h2>Missões</h2>
+          <form id="mission-form" class="inline-form">
+            <label class="sr-only" for="mission-goal">Objetivo da missão</label>
+            <input id="mission-goal" name="goal" placeholder="Novo objetivo" maxlength="2000" required>
+            <button type="submit">Criar</button>
+          </form>
+          <ul id="missions" class="list"></ul>
+        </section>
+        <section class="panel">
+          <h2>Memórias</h2>
+          <form id="memory-form">
+            <label>Memória <input name="content" required maxlength="20000"></label>
+            <div class="inline-form">
+              <label>Tipo
+                <select name="kind">
+                  <option>working</option><option>episodic</option><option>semantic</option><option>procedural</option>
+                  <option>preference</option><option>project</option><option>research</option><option>system</option>
+                </select>
+              </label>
+              <button type="submit">Registrar</button>
+            </div>
+          </form>
+          <ul id="memories" class="list"></ul>
+        </section>
+        <section class="panel">
+          <h2>Aprovações pendentes</h2>
+          <ul id="approvals" class="list"></ul>
+        </section>
+        <section class="panel">
+          <h2>Provedor de IA</h2>
+          <form id="settings-form">
+            <label>Provedor
+              <select name="provider"><option value="none">Desativado</option><option value="cloudflare-ai">Cloudflare AI</option></select>
+            </label>
+            <label>Modelo
+              <select name="model">
+                <option value="@cf/meta/llama-3.1-8b-instruct-fast">Llama 3.1 Instruct (fast)</option>
+                <option value="@cf/meta/llama-3.1-8b-instruct">Llama 3.1 Instruct</option>
+              </select>
+            </label>
+            <button type="submit">Salvar configuração</button>
+          </form>
+          <p class="muted">A IA só funciona se a conta Cloudflare tiver o binding AI configurado. Nenhuma chave é pedida ou enviada pelo navegador.</p>
+        </section>
+        <section class="panel">
+          <h2>Auditoria</h2>
+          <p id="audit-status" class="muted"></p>
+          <ul id="audit" class="list"></ul>
+        </section>
+        <section class="panel">
+          <h2>Experiências e aprendizados</h2>
+          <ul id="experiences" class="list"></ul>
+          <ul id="learning" class="list"></ul>
+        </section>
+        <section class="panel">
+          <h2>Conselho</h2>
+          <p class="muted">A coordenação dos 17 ministros não está disponível nesta versão: as identidades e responsabilidades aprovadas ainda não estão definidas no núcleo atual.</p>
+        </section>
+      </section>
+    </div>
+    <footer>Lucky Cloud 0.1 · Ações privilegiadas não são executadas nesta versão.</footer>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
