@@ -1,7 +1,7 @@
 {
   "name": "lucky",
-  "version": "0.2.6",
-  "description": "Lucky — agente pessoal local com memória estruturada, aprendizagem auditável e autodesenvolvimento supervisionado",
+  "version": "0.3.0",
+  "description": "Lucky — núcleo local com raciocínio simbólico, planejamento, aprendizagem auditável e evolução supervisionada",
   "type": "module",
   "engines": {
     "node": ">=22.18"
