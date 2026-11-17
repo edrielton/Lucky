@@ -89,8 +89,8 @@ export async function runSelfTests(
   const command = isolation === "docker" ? "docker" : process.execPath;
   const sandboxRunId = randomUUID();
   const args = isolation === "docker"
-    ? buildDockerSandboxArgs(root, ["node", "--experimental-strip-types", "--test", "--no-warnings", ...testFiles.map((file) => `/workspace/${path.relative(root, file).split(path.sep).join("/")}`)], { ...DEFAULT_SANDBOX_LIMITS, timeoutMs }, undefined, sandboxRunId)
-    : ["--experimental-strip-types", "--test", "--no-warnings", ...testFiles];
+    ? buildDockerSandboxArgs(root, ["node", "--experimental-strip-types", "--test", "--test-reporter=tap", "--no-warnings", ...testFiles.map((file) => `/workspace/${path.relative(root, file).split(path.sep).join("/")}`)], { ...DEFAULT_SANDBOX_LIMITS, timeoutMs }, undefined, sandboxRunId)
+    : ["--experimental-strip-types", "--test", "--test-reporter=tap", "--no-warnings", ...testFiles];
   const result = await new Promise<{ exitCode: number | null; signal: NodeJS.Signals | null; timedOut: boolean; output: string }>((resolve) => {
     let output = "";
     let timedOut = false;
