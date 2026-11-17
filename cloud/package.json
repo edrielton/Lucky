@@ -1,0 +1,8 @@
+{
+  "name": "lucky-cloud",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --test --no-warnings test/*.test.ts"
+  }
+}
