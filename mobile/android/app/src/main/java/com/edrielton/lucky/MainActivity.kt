@@ -353,17 +353,46 @@ private fun CoreStatusCard(emergency: Boolean) {
 
 @Composable
 private fun HomeSection(missionCount: Int, memoryCount: Int, emergency: Boolean) {
-    Text("Painel de comando", style = MaterialTheme.typography.titleLarge)
-    Text("Estado: ${if (emergency) "EMERGÊNCIA" else "OPERACIONAL"}")
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Card(Modifier.weight(1f)) { Column(Modifier.padding(12.dp)) { Text("Missões"); Text("$missionCount", style = MaterialTheme.typography.headlineMedium) } }
-        Card(Modifier.weight(1f)) { Column(Modifier.padding(12.dp)) { Text("Memórias"); Text("$memoryCount", style = MaterialTheme.typography.headlineMedium) } }
+    Text("Visão geral do sistema", style = MaterialTheme.typography.titleLarge)
+    Text("Painel de situação • atualização local", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Card(Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFF10283A))) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("MISSÕES", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Text("$missionCount", style = MaterialTheme.typography.headlineLarge)
+                Text("registradas", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Card(Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFF1B1A35))) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("MEMÓRIA", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                Text("$memoryCount", style = MaterialTheme.typography.headlineLarge)
+                Text("registros", style = MaterialTheme.typography.bodySmall)
+            }
+        }
     }
-    Text("Subsistemas", style = MaterialTheme.typography.titleMedium)
-    listOf("Inteligência local via AICore (quando disponível)", "Kernel e estado persistente", "Missões locais", "Memória persistente", "Approval Gate de uso único", "Auditoria limitada e botão de emergência", "Propostas de autocorreção em sandbox interna").forEach { Text("• $it") }
-    Text("A sandbox Android ainda não executa builds nem testes automatizados do projeto. Não confundir proposta gerada com correção validada.", style = MaterialTheme.typography.bodySmall)
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("ESTADO DOS SUBSISTEMAS", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            listOf(
+                "CORE" to "Kernel local ativo",
+                "MEMORY" to "Armazenamento persistente",
+                "MISSION CONTROL" to "Gerenciamento de tarefas",
+                "SECURITY" to if (emergency) "Bloqueio de emergência ativo" else "Monitoramento ativo",
+                "SELF-DEVELOPMENT" to "Propostas isoladas • validação ainda pendente"
+            ).forEach { (name, detail) ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f)) {
+                        Text(name, style = MaterialTheme.typography.labelMedium)
+                        Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text(if (name == "SECURITY" && emergency) "LOCK" else "●", color = if (name == "SECURITY" && emergency) androidx.compose.ui.graphics.Color(0xFFFF7185) else MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+    }
+    Text("A execução isolada de builds e testes automatizados ainda não foi conectada ao Android. O painel não marca esses recursos como concluídos.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
-
 @Composable
 private fun ChatSection(status: String, reply: String, busy: Boolean, nvidiaConfigured: Boolean, onTest: (String) -> Unit) {
     var prompt by remember { mutableStateOf("Olá, Lucky. Responda em português.") }
