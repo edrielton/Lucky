@@ -1,6 +1,8 @@
 package com.edrielton.lucky.updates
 
 import android.content.Context
+import com.edrielton.lucky.core.LuckyCapability
+import com.edrielton.lucky.core.LuckyCapabilities
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -22,6 +24,31 @@ class UpdateManager(context: Context) {
     private val manifestUrl = "$feedBase/manifest.json"
 
     fun installedVersion(): String = prefs.getString("installed_version", "0.0.0") ?: "0.0.0"
+
+    fun loadCapabilities(): List<LuckyCapability> {
+        val file = File(runtimeRoot, "capabilities.json")
+        if (!file.isFile) return LuckyCapabilities.all
+        return try {
+            val root = JSONObject(file.readText(Charsets.UTF_8))
+            val rows = root.optJSONArray("capabilities") ?: return LuckyCapabilities.all
+            if (rows.length() !in 1..40) return LuckyCapabilities.all
+            val parsed = (0 until rows.length()).mapNotNull { index ->
+                val row = rows.optJSONObject(index) ?: return@mapNotNull null
+                val name = row.optString("name").take(100)
+                val description = row.optString("description").take(500)
+                val rawState = row.optString("state")
+                val state = if (rawState in setOf(
+                    "INTERNO", "PARCIAL", "PENDENTE",
+                    "DEPENDENTE_DO_PROVEDOR", "NAO_IMPLEMENTADO"
+                )) rawState else "DESCONHECIDO"
+                if (name.isBlank() || description.isBlank()) null
+                else LuckyCapability(name, description, state)
+            }
+            if (parsed.size == rows.length()) parsed else LuckyCapabilities.all
+        } catch (_: Exception) {
+            LuckyCapabilities.all
+        }
+    }
 
     fun checkAndApply(): UpdateResult {
         val manifestBytes = download(manifestUrl, 64 * 1024)
