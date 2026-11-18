@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersionCode": 2,
   "files": [
     {
       "path": "runtime/capabilities.json",
       "url": "https://raw.githubusercontent.com/edrielton/Lucky/feature/lucky-mobile-android/updates/stable/runtime/capabilities.json",
-      "size": 855,
-      "sha256": "d017878cd7e31069c0fbe11ce834d5dfe468e30048f8909d6c2fc328d220a18c"
+      "size": 2851,
+      "sha256": "71a612891d2e2e0bf1c0cefd86febc2f6a88d11ecc1473c0b2862f09f643cecc"
     }
   ]
 }
