@@ -22,7 +22,7 @@ class NvidiaConfigStore(context: Context) {
         return NvidiaConfig(
             apiKey = key,
             baseUrl = prefs.getString("base_url", "https://integrate.api.nvidia.com/v1") ?: "https://integrate.api.nvidia.com/v1",
-            model = prefs.getString("model", "meta/llama-3.1-70b-instruct") ?: "meta/llama-3.1-70b-instruct"
+            model = prefs.getString("model", "meta/llama-3.1-8b-instruct") ?: "meta/llama-3.1-8b-instruct"
         )
     }
 
