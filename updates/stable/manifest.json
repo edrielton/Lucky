@@ -6,8 +6,8 @@
     {
       "path": "runtime/capabilities.json",
       "url": "https://raw.githubusercontent.com/edrielton/Lucky/feature/lucky-mobile-android/updates/stable/runtime/capabilities.json",
-      "size": 1040,
-      "sha256": "c61624a1d514cc749a7217cac00fe859a8cfffda9949443f58488a3af8902a89"
+      "size": 855,
+      "sha256": "d017878cd7e31069c0fbe11ce834d5dfe468e30048f8909d6c2fc328d220a18c"
     }
   ]
 }
