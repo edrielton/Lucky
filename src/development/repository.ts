@@ -148,8 +148,8 @@ function safeTarget(root: string, relativePath: string): string {
     throw new Error(`Caminho inválido: ${relativePath}`);
   }
   const rawParts = relativePath.split(/[\\/]/);
-  if (rawParts.some((part) => part === ".." || part === "")) {
-    throw new Error(`Traversal bloqueado: ${relativePath}`);
+  if (rawParts.some((part) => part === ".." || part === "" || part === ".")) {
+    throw new Error(`Traversal ou segmento inválido bloqueado: ${relativePath}`);
   }
   const normalized = relativePath.replaceAll("\\", "/").toLowerCase();
   const parts = normalized.split("/");
@@ -159,19 +159,32 @@ function safeTarget(root: string, relativePath: string): string {
   if (PROTECTED_PATHS.has(normalized)) {
     throw new Error(`Arquivo protegido por integridade: ${relativePath}`);
   }
-  if (parts[0] === "src" && (parts[1] === "kernel" || parts[1] === "security" || parts[1] === "testing")) {
-    throw new Error(`Sistema de segurança ou testes protegido: ${relativePath}`);
+  if (parts[0] === ".github" ||
+      (parts[0] === "src" && ["kernel", "security", "testing", "development"].includes(parts[1] ?? ""))) {
+    throw new Error(`Sistema de segurança, desenvolvimento ou CI protegido: ${relativePath}`);
   }
   if (parts[0] === "test" || parts[0] === "tests") {
     throw new Error(`Alteração direta de testes bloqueada: ${relativePath}`);
   }
-  const target = path.resolve(root, ...relativePath.split("/"));
+  const target = path.resolve(root, ...rawParts);
   const rel = path.relative(root, target);
-  if (rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
+  if (rel.startsWith(`..${path.sep}`) || rel === ".." || path.isAbsolute(rel)) {
     throw new Error(`Caminho fora do repositório: ${relativePath}`);
+  }
+  let cursor = root;
+  for (const part of rawParts.slice(0, -1)) {
+    cursor = path.join(cursor, part);
+    if (fs.existsSync(cursor)) {
+      const stat = fs.lstatSync(cursor);
+      if (stat.isSymbolicLink()) throw new Error(`Link simbólico no caminho bloqueado: ${relativePath}`);
+      if (!stat.isDirectory()) throw new Error(`Componente do caminho não é diretório: ${relativePath}`);
+    }
   }
   if (fs.existsSync(target) && fs.lstatSync(target).isSymbolicLink()) {
     throw new Error(`Link simbólico bloqueado: ${relativePath}`);
+  }
+  if (fs.existsSync(target) && !fs.lstatSync(target).isFile()) {
+    throw new Error(`O destino precisa ser um arquivo regular: ${relativePath}`);
   }
   return target;
 }
@@ -206,8 +219,10 @@ export function applyRepositoryProposal(root: string, proposal: RepositoryPropos
 }
 
 export function repositoryDiff(root: string): { diff: string; diffHash: string } {
-  let diff = git(root, ["diff", "--no-ext-diff", "--binary", "--stat"]);
-  diff += "\n" + git(root, ["diff", "--no-ext-diff", "--binary"]);
+  let diff = git(root, ["diff", "--cached", "--no-ext-diff", "--binary", "--stat"]);
+  diff += "\n" + git(root, ["diff", "--cached", "--no-ext-diff", "--binary"]);
+  const names = git(root, ["diff", "--cached", "--name-only"]);
+  diff += "\n--- staged paths ---\n" + names;
   const diffHash = createHash("sha256").update(diff, "utf8").digest("hex");
   return { diff, diffHash };
 }
@@ -285,6 +300,18 @@ export async function runRepositoryDevelopmentCycle(options: RepositoryDevelopme
       };
     }
 
+    // Stage only the exact, validated proposal paths. No unrelated or untracked
+    // workspace file can silently enter the commit.
+    git(inspection.root, ["--literal-pathspecs", "add", "--", ...proposal.changes.map((change) => change.path)]);
+    const stagedNames = git(inspection.root, ["diff", "--cached", "--name-only"]).split("\n").filter(Boolean).sort();
+    const expectedNames = proposal.changes.map((change) => change.path.replaceAll("\\", "/")).sort();
+    if (JSON.stringify(stagedNames) !== JSON.stringify(expectedNames)) {
+      return {
+        status: "REPROVADO", inspection, branchName: options.branchName,
+        proposalHash, baseline, finalTests,
+        report: "O conjunto de arquivos preparados não corresponde exatamente à proposta. Publicação bloqueada.",
+      };
+    }
     const { diff, diffHash } = repositoryDiff(inspection.root);
     if (!diff.trim()) {
       return {
@@ -315,7 +342,6 @@ export async function runRepositoryDevelopmentCycle(options: RepositoryDevelopme
       };
     }
 
-    git(inspection.root, ["add", "--all"]);
     git(inspection.root, ["diff", "--cached", "--check"]);
     git(inspection.root, ["-c", "user.name=Lucky", "-c", "user.email=lucky@localhost", "commit", "-m", `Lucky: ${proposal.summary}`]);
 
