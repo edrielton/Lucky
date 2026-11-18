@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -33,6 +34,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.edrielton.lucky.ai.NvidiaConfigStore
+import com.edrielton.lucky.ai.NvidiaNimClient
 import com.edrielton.lucky.core.CouncilRegistry
 import com.edrielton.lucky.core.LuckyKernel
 import com.edrielton.lucky.development.StagedCorrection
@@ -44,12 +47,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val sections = listOf("Início", "Chat", "Missões", "Evolução", "Memória", "Conselho", "Segurança")
+private val sections = listOf("Painel", "Chat", "Missões", "Evolução", "Memória", "Conselho", "Segurança", "API")
 
 class MainActivity : ComponentActivity() {
     private var generativeModel: GenerativeModel? = null
     private lateinit var kernel: LuckyKernel
     private lateinit var development: SupervisedDevelopment
+    private lateinit var nvidiaStore: NvidiaConfigStore
+    private lateinit var nvidia: NvidiaNimClient
+    var nvidiaStatus by mutableStateOf("NVIDIA NIM não configurada.")
+        private set
+    var nvidiaConfigured by mutableStateOf(false)
+        private set
 
     var nanoStatus by mutableStateOf("Aguardando teste do AICore.")
         private set
@@ -68,9 +77,22 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         kernel = LuckyKernel(applicationContext)
         development = SupervisedDevelopment(applicationContext, kernel)
+        nvidiaStore = NvidiaConfigStore(applicationContext)
+        nvidia = NvidiaNimClient(nvidiaStore)
+        nvidiaConfigured = nvidiaStore.hasKey()
         generativeModel = Generation.getClient()
         setContent {
-            MaterialTheme {
+            MaterialTheme(colorScheme = darkColorScheme(
+                primary = androidx.compose.ui.graphics.Color(0xFF62E8F2),
+                onPrimary = androidx.compose.ui.graphics.Color(0xFF001316),
+                secondary = androidx.compose.ui.graphics.Color(0xFFB49BFF),
+                background = androidx.compose.ui.graphics.Color(0xFF060B14),
+                surface = androidx.compose.ui.graphics.Color(0xFF101B2B),
+                surfaceVariant = androidx.compose.ui.graphics.Color(0xFF17263A),
+                onBackground = androidx.compose.ui.graphics.Color(0xFFE7F6FF),
+                onSurface = androidx.compose.ui.graphics.Color(0xFFE7F6FF),
+                onSurfaceVariant = androidx.compose.ui.graphics.Color(0xFF9CB6C9)
+            )) {
                 LuckyMobileApp(
                     kernel = kernel,
                     development = development,
@@ -80,6 +102,11 @@ class MainActivity : ComponentActivity() {
                     developmentStatus = developmentStatus,
                     isDeveloping = isDeveloping,
                     stagedCorrection = stagedCorrection,
+                    nvidiaStatus = nvidiaStatus,
+                    nvidiaConfigured = nvidiaConfigured,
+                    onSaveNvidia = ::saveNvidiaConfig,
+                    onTestNvidia = ::testNvidia,
+                    onSendChat = ::sendChat,
                     onTestNano = ::testNano2,
                     onGenerateCorrection = ::generateCorrection,
                     onApproveCorrection = ::approveCorrection
@@ -175,6 +202,56 @@ class MainActivity : ComponentActivity() {
             } finally {
                 isDeveloping = false
             }
+        }
+    }
+
+    private fun saveNvidiaConfig(key: String, baseUrl: String, model: String) {
+        try {
+            nvidiaStore.save(key, baseUrl, model)
+            nvidiaConfigured = nvidiaStore.hasKey()
+            nvidiaStatus = if (nvidiaConfigured) "Chave salva com criptografia Android Keystore." else "Configuração salva sem chave."
+            kernel.audit("NVIDIA_CONFIG_SAVED", "Endpoint/modelo atualizados; chave presente: $nvidiaConfigured")
+        } catch (error: Exception) {
+            nvidiaStatus = "Falha ao salvar: ${error.message}"
+        }
+    }
+
+    private fun testNvidia() {
+        if (!nvidiaStore.hasKey()) { nvidiaStatus = "Insira e salve a chave NVIDIA primeiro."; return }
+        lifecycleScope.launch {
+            nvidiaStatus = "Testando conexão com NVIDIA NIM..."
+            try {
+                val answer = withContext(Dispatchers.IO) { nvidia.test() }
+                nvidiaStatus = "Conexão confirmada: $answer"
+                kernel.audit("NVIDIA_API_TEST", "Teste de conexão concluído.")
+            } catch (error: Exception) {
+                nvidiaStatus = "Falha no teste: ${error.message ?: "erro desconhecido"}"
+            }
+        }
+    }
+
+    private fun sendChat(prompt: String) {
+        if (isTestingNano || prompt.isBlank()) return
+        lifecycleScope.launch {
+            isTestingNano = true
+            nanoReply = ""
+            nanoStatus = if (nvidiaStore.hasKey()) "Consultando NVIDIA NIM..." else "Consultando Gemini Nano local..."
+            try {
+                val answer = if (nvidiaStore.hasKey()) {
+                    withContext(Dispatchers.IO) { nvidia.complete(prompt) }
+                } else {
+                    val model = generativeModel ?: throw IllegalStateException("AICore não inicializado.")
+                    val status = withContext(Dispatchers.IO) { model.checkStatus() }
+                    if (status != FeatureStatus.AVAILABLE) throw IllegalStateException("NVIDIA não configurada e AICore indisponível: $status")
+                    val result = withContext(Dispatchers.IO) { model.generateContent(prompt) }
+                    result.candidates.firstOrNull()?.text.orEmpty()
+                }
+                nanoReply = answer
+                nanoStatus = if (nvidiaStore.hasKey()) "Resposta recebida da NVIDIA NIM." else "Resposta recebida do Gemini Nano local."
+                kernel.audit("CHAT_RESPONSE", if (nvidiaStore.hasKey()) "NVIDIA NIM" else "Gemini Nano")
+            } catch (error: Exception) {
+                nanoStatus = "Falha na conversa: ${error.message}"
+            } finally { isTestingNano = false }
         }
     }
 
