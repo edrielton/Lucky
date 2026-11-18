@@ -132,6 +132,7 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+        checkUpdates()
     }
 
     private fun checkUpdates() {
