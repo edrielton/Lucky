@@ -147,7 +147,7 @@ class MainActivity : ComponentActivity() {
                 } else ""
                 kernel.audit("UPDATE_CHECK", updateStatus)
             } catch (error: Exception) {
-                updateStatus = "Falha na atualização: \${error.message ?: error::class.java.simpleName}"
+                updateStatus = "Falha na atualização: ${error.message ?: error::class.java.simpleName}"
                 kernel.audit("UPDATE_ERROR", updateStatus)
             } finally {
                 updateBusy = false
