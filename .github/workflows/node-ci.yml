@@ -1,0 +1,49 @@
+name: Lucky Node CI
+
+on:
+  push:
+    branches:
+      - main
+      - work/lucky-supervised-dev-fix
+      - lucky/supervised-development-foundation
+    paths:
+      - "src/**"
+      - "test/**"
+      - "package.json"
+      - "tsconfig.json"
+      - ".github/workflows/node-ci.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "test/**"
+      - "package.json"
+      - "tsconfig.json"
+      - ".github/workflows/node-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.18.0"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run regression tests
+        run: npm test
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Run quality gate
+        run: npm run qa
