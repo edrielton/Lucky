@@ -19,11 +19,16 @@ class NvidiaConfigStore(context: Context) {
     fun load(): NvidiaConfig {
         val encrypted = prefs.getString("api_key", null)
         val key = encrypted?.let { decrypt(it) }.orEmpty()
-        return NvidiaConfig(
-            apiKey = key,
-            baseUrl = prefs.getString("base_url", "https://integrate.api.nvidia.com/v1") ?: "https://integrate.api.nvidia.com/v1",
-            model = prefs.getString("model", "meta/llama-3.1-8b-instruct") ?: "meta/llama-3.1-8b-instruct"
-        )
+        val baseUrl = prefs.getString("base_url", "https://integrate.api.nvidia.com/v1")
+            ?: "https://integrate.api.nvidia.com/v1"
+        val storedModel = prefs.getString("model", null)
+        val defaultModel = "nvidia/nemotron-3.5-bolt-e4b"
+        // Migra automaticamente o modelo Llama 3.1 8B, descontinuado pela NVIDIA.
+        val model = if (storedModel.isNullOrBlank() || storedModel == "meta/llama-3.1-8b-instruct") {
+            prefs.edit().putString("model", defaultModel).apply()
+            defaultModel
+        } else storedModel
+        return NvidiaConfig(apiKey = key, baseUrl = baseUrl, model = model)
     }
 
     fun save(apiKey: String, baseUrl: String, model: String) {
