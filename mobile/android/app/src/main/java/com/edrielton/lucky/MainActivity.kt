@@ -41,6 +41,7 @@ import com.edrielton.lucky.core.LuckyCapabilities
 import com.edrielton.lucky.core.LuckyKernel
 import com.edrielton.lucky.development.StagedCorrection
 import com.edrielton.lucky.development.SupervisedDevelopment
+import com.edrielton.lucky.updates.UpdateManager
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.genai.prompt.GenerativeModel
@@ -54,6 +55,11 @@ class MainActivity : ComponentActivity() {
     private var generativeModel: GenerativeModel? = null
     private lateinit var kernel: LuckyKernel
     private lateinit var development: SupervisedDevelopment
+    private lateinit var updateManager: UpdateManager
+    var updateStatus by mutableStateOf("Atualizador aguardando verificação.")
+        private set
+    var updateBusy by mutableStateOf(false)
+        private set
     private lateinit var nvidiaStore: NvidiaConfigStore
     private lateinit var nvidia: NvidiaNimClient
     var nvidiaStatus by mutableStateOf("NVIDIA NIM não configurada.")
@@ -82,6 +88,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         kernel = LuckyKernel(applicationContext)
         development = SupervisedDevelopment(applicationContext, kernel)
+        updateManager = UpdateManager(applicationContext)
         nvidiaStore = NvidiaConfigStore(applicationContext)
         nvidia = NvidiaNimClient(nvidiaStore)
         nvidiaConfigured = nvidiaStore.hasKey()
@@ -118,8 +125,31 @@ class MainActivity : ComponentActivity() {
                     onSendChat = ::sendChat,
                     onTestNano = ::testNano2,
                     onGenerateCorrection = ::generateCorrection,
-                    onApproveCorrection = ::approveCorrection
+                    onApproveCorrection = ::approveCorrection,
+                    updateStatus = updateStatus,
+                    updateBusy = updateBusy,
+                    onCheckUpdates = ::checkUpdates
                 )
+            }
+        }
+    }
+
+    private fun checkUpdates() {
+        if (updateBusy) return
+        lifecycleScope.launch {
+            updateBusy = true
+            updateStatus = "Consultando o canal estável e validando os pacotes..."
+            try {
+                val result = withContext(Dispatchers.IO) { updateManager.checkAndApply() }
+                updateStatus = result.message + if (result.updatedFiles.isNotEmpty()) {
+                    "\nArquivos: " + result.updatedFiles.joinToString()
+                } else ""
+                kernel.audit("UPDATE_CHECK", updateStatus)
+            } catch (error: Exception) {
+                updateStatus = "Falha na atualização: \${error.message ?: error::class.java.simpleName}"
+                kernel.audit("UPDATE_ERROR", updateStatus)
+            } finally {
+                updateBusy = false
             }
         }
     }
@@ -315,7 +345,10 @@ private fun LuckyMobileApp(
     onSendChat: (String) -> Unit,
     onTestNano: (String) -> Unit,
     onGenerateCorrection: (String, String) -> Unit,
-    onApproveCorrection: (StagedCorrection) -> Unit
+    onApproveCorrection: (StagedCorrection) -> Unit,
+    updateStatus: String,
+    updateBusy: Boolean,
+    onCheckUpdates: () -> Unit
 ) {
     var selectedSection by remember { mutableIntStateOf(0) }
     var refresh by remember { mutableIntStateOf(0) }
@@ -347,6 +380,7 @@ private fun LuckyMobileApp(
                     6 -> CapabilitySection()
                     7 -> SecuritySection(emergency, audit, onEmergency = { kernel.updateEmergencyStop(it); refresh++ })
                     8 -> NvidiaSection(status = nvidiaStatus, configured = nvidiaConfigured, baseUrlValue = nvidiaBaseUrl, modelValue = nvidiaModel, onSave = onSaveNvidia, onTest = onTestNvidia)
+                    9 -> UpdateSection(updateStatus, updateBusy, onCheckUpdates)
                 }
                 Text("Registros atualizados: $refresh", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -539,6 +573,23 @@ private fun NvidiaSection(status: String, configured: Boolean, baseUrlValue: Str
 }
 
 @Composable
+private fun UpdateSection(status: String, busy: Boolean, onCheck: () -> Unit) {
+    Text("Atualizações do Lucky", style = MaterialTheme.typography.titleLarge)
+    Text("O aplicativo verifica pacotes declarativos em um canal HTTPS. Esses pacotes podem atualizar dados e configurações compatíveis sem reinstalar o APK.")
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Canal estável", style = MaterialTheme.typography.titleMedium)
+            Text(status)
+            Button(onClick = onCheck, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                Text(if (busy) "Verificando..." else "Verificar atualizações")
+            }
+        }
+    }
+    Text("Proteções: origem HTTPS fixa, limite de tamanho, caminhos restritos, validação SHA-256 e aplicação com cópia de segurança. O pacote atual contém somente JSON; não executa código baixado.")
+    Text("Limite: alterações em Kotlin, bibliotecas nativas, permissões ou componentes Android ainda exigem uma nova versão do aplicativo. A assinatura criptográfica do manifesto e a integração desses pacotes nas capacidades ativas são etapas futuras.")
+}
+
+@Composable
 private fun CapabilitySection() {
     Text("Capacidades internas do Lucky", style = MaterialTheme.typography.titleLarge)
     Text("Existe um único sistema: Lucky. Estas são responsabilidades internas do núcleo, não ministros ou agentes independentes.")
@@ -558,7 +609,7 @@ private fun CapabilitySection() {
 @Composable
 private fun MoreSection(onNavigate: (Int) -> Unit) {
     Text("Sistemas do núcleo", style = MaterialTheme.typography.titleLarge)
-    listOf("Memória persistente", "Capacidades do Lucky", "Segurança e auditoria", "Provedor NVIDIA NIM").forEachIndexed { index, title ->
+    listOf("Memória persistente", "Capacidades do Lucky", "Segurança e auditoria", "Provedor NVIDIA NIM", "Atualizações do Lucky").forEachIndexed { index, title ->
         Card(Modifier.fillMaxWidth()) {
             Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
