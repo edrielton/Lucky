@@ -11,12 +11,11 @@ data class LuckyMission(val id: String, val title: String, val detail: String, v
 class LuckyKernel(context: Context) {
     private val prefs = context.getSharedPreferences("lucky_kernel_v1", Context.MODE_PRIVATE)
 
-    var emergencyStop: Boolean
+    val emergencyStop: Boolean
         get() = prefs.getBoolean("emergency_stop", false)
-        private set(value) { prefs.edit().putBoolean("emergency_stop", value).apply() }
 
-    fun setEmergencyStop(enabled: Boolean) {
-        emergencyStop = enabled
+    fun updateEmergencyStop(enabled: Boolean) {
+        prefs.edit().putBoolean("emergency_stop", enabled).apply()
         audit(if (enabled) "EMERGENCY_STOP_ENABLED" else "EMERGENCY_STOP_DISABLED", "Execução de missões bloqueada/reativada pelo usuário")
     }
 
