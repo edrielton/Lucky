@@ -206,7 +206,7 @@ class MainActivity : ComponentActivity() {
 
     private fun saveNvidiaConfig(key: String, baseUrl: String, model: String) {
         try {
-            nvidiaStore.save(key, baseUrl, model)
+            nvidiaStore.save(if (key.isBlank()) nvidiaStore.load().apiKey else key, baseUrl, model)
             nvidiaConfigured = nvidiaStore.hasKey()
             nvidiaStatus = if (nvidiaConfigured) "Chave salva com criptografia Android Keystore." else "Configuração salva sem chave."
             kernel.audit("NVIDIA_CONFIG_SAVED", "Endpoint/modelo atualizados; chave presente: $nvidiaConfigured")
@@ -467,7 +467,7 @@ private fun PanelHeader(emergency: Boolean, nvidia: Boolean) {
 private fun NvidiaSection(status: String, configured: Boolean, onSave: (String, String, String) -> Unit, onTest: () -> Unit) {
     var apiKey by remember { mutableStateOf("") }
     var baseUrl by remember { mutableStateOf("https://integrate.api.nvidia.com/v1") }
-    var model by remember { mutableStateOf("meta/llama-3.1-70b-instruct") }
+    var model by remember { mutableStateOf("meta/llama-3.1-8b-instruct") }
     Text("Provedor de inteligência", style = MaterialTheme.typography.titleLarge)
     Text("Configure NVIDIA NIM. A chave é criptografada com Android Keystore e não é exibida novamente depois de salva.")
     OutlinedTextField(apiKey, { apiKey = it }, modifier = Modifier.fillMaxWidth(), label = { Text(if (configured) "Nova chave API (deixe vazio para manter)" else "Chave API NVIDIA") }, singleLine = true)
