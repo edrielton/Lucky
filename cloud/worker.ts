@@ -36,6 +36,17 @@ export default {
 
 async function handleApi(request: Request, env: Env, url: URL): Promise<Response> {
   const { pathname } = url;
+  // Public, non-sensitive diagnostic endpoint. It confirms whether requests reach
+  // this Worker and whether its configured database binding is usable.
+  if (pathname === "/api/health" && request.method === "GET") {
+    try {
+      await env.DB.prepare("SELECT 1 AS ok").first<{ ok: number }>();
+      return json({ ok: true, service: "lucky-cloud", database: "connected" });
+    } catch (error) {
+      console.error("Lucky Cloud health check failed", error);
+      return json({ ok: false, service: "lucky-cloud", database: "unavailable" }, 503);
+    }
+  }
   if (pathname === "/api/auth/register" && request.method === "POST") return register(request, env.DB);
   if (pathname === "/api/auth/login" && request.method === "POST") return login(request, env.DB);
 
