@@ -135,12 +135,11 @@ export function createIsolatedBranch(root: string, baseBranch: string, branchNam
     throw new Error("Autodesenvolvimento recusado: branch principal bloqueada.");
   }
   const branch = git(root, ["branch", "--show-current"]);
-  if (branch === "main" || branch === "master") {
-    throw new Error("A branch atual é principal; mudanças só podem ser feitas em uma branch Lucky isolada.");
+  if (branch !== baseBranch) {
+    throw new Error(`O checkout precisa estar em ${baseBranch} para criar a branch isolada.`);
   }
-  if (branch) {
-    throw new Error(`Branch isolada já ativa: ${branch}. O ciclo não troca branches automaticamente.`);
-  }
+  const existing = git(root, ["branch", "--list", branchName]);
+  if (existing) throw new Error(`A branch ${branchName} já existe; escolha outro nome para não sobrescrever trabalho anterior.`);
   git(root, ["checkout", "-b", branchName, baseBranch]);
 }
 
@@ -178,23 +177,31 @@ function safeTarget(root: string, relativePath: string): string {
 }
 
 export function applyRepositoryProposal(root: string, proposal: RepositoryProposal): void {
-  if (!proposal.summary.trim() || !proposal.rationale.trim()) {
+  if (!proposal || typeof proposal.summary !== "string" || !proposal.summary.trim() ||
+      typeof proposal.rationale !== "string" || !proposal.rationale.trim()) {
     throw new Error("A proposta precisa de resumo e justificativa.");
   }
   if (!Array.isArray(proposal.changes) || proposal.changes.length < 1 || proposal.changes.length > 30) {
     throw new Error("A proposta deve conter entre 1 e 30 arquivos.");
   }
+
+  // Validate every path and duplicate before writing anything: a bad last item
+  // must not leave a partially applied proposal in the working tree.
+  const prepared: Array<{ target: string; content: string }> = [];
   const seen = new Set<string>();
   for (const change of proposal.changes) {
-    if (typeof change.content !== "string" || Buffer.byteLength(change.content, "utf8") > 1_000_000) {
+    if (!change || typeof change.content !== "string" || Buffer.byteLength(change.content, "utf8") > 1_000_000) {
       throw new Error("Conteúdo inválido ou maior que 1 MB.");
     }
     const target = safeTarget(root, change.path);
-    const key = change.path.replaceAll("\\", "/").toLower
+    const key = path.relative(root, target).split(path.sep).join("/").toLowerCase();
     if (seen.has(key)) throw new Error(`Arquivo repetido na proposta: ${change.path}`);
     seen.add(key);
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, change.content, "utf8");
+    prepared.push({ target, content: change.content });
+  }
+  for (const item of prepared) {
+    fs.mkdirSync(path.dirname(item.target), { recursive: true });
+    fs.writeFileSync(item.target, item.content, "utf8");
   }
 }
 
@@ -211,20 +218,8 @@ export async function runRepositoryDevelopmentCycle(options: RepositoryDevelopme
   if (inspection.dirty) {
     throw new Error("O desenvolvimento foi recusado: o checkout possui alterações locais não comprometidas.");
   }
-  if (inspection.currentBranch !== baseBranch && baseBranch !== "") {
+  if (inspection.currentBranch !== baseBranch) {
     throw new Error(`O checkout precisa estar em ${baseBranch} antes de iniciar o ciclo.`);
-  }
-  const testRunner = options.testRunner ?? ((root: string, timeoutMs?: number) => runSelfTests(root, timeoutMs));
-  const baseline = await testRunner(inspection.root, options.timeoutMs);
-  if (baseline.ok) {
-    return {
-      status: "BASELINE_PASSOU",
-      inspection,
-      branchName: options.branchName,
-      baseline,
-      finalTests: baseline,
-      report: "A suíte já passou. Nenhuma proposta foi criada e nenhuma branch ou arquivo foi alterado.",
-    };
   }
 
   const maxAttempts = options.maxAttempts ?? 3;
@@ -232,42 +227,96 @@ export async function runRepositoryDevelopmentCycle(options: RepositoryDevelopme
     throw new Error("maxAttempts deve estar entre 1 e 3.");
   }
 
-  let proposal: RepositoryProposal | null = null;
+  const baselineRunner = options.testRunner ?? ((root: string, timeoutMs?: number) => runSelfTests(root, timeoutMs));
+  const candidateRunner = options.testRunner ??
+    ((root: string, timeoutMs?: number) => runSelfTests(root, timeoutMs, { isolation: "docker" }));
+  const baseline = await baselineRunner(inspection.root, options.timeoutMs);
+  if (!baseline.ok) {
+    return {
+      status: "REPROVADO",
+      inspection,
+      branchName: options.branchName,
+      baseline,
+      finalTests: baseline,
+      report: "A suíte de referência falhou antes de qualquer alteração. O autodesenvolvimento foi interrompido; corrija ou investigue a base primeiro.",
+    };
+  }
+
+  let branchCreated = false;
+  let lastTests = baseline;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    proposal = await options.propose({ inspection, goal: options.goal, baseline });
+    const proposal = await options.propose({ inspection, goal: options.goal, baseline: lastTests });
     if (!proposal) {
-      return { status: "PROPOSTA_RECUSADA", inspection, branchName: options.branchName, baseline, finalTests: baseline, report: "Nenhuma proposta foi recebida." };
+      return {
+        status: "PROPOSTA_RECUSADA", inspection, branchName: options.branchName,
+        baseline, finalTests: lastTests,
+        report: "Nenhuma proposta válida foi recebida. Nenhuma alteração foi publicada.",
+      };
     }
 
     const proposalHash = hashRepositoryProposal(proposal);
-    createIsolatedBranch(inspection.root, baseBranch, options.branchName);
+    if (!branchCreated) {
+      createIsolatedBranch(inspection.root, baseBranch, options.branchName);
+      branchCreated = true;
+    } else {
+      // Each attempt starts from the exact base commit, not from a failed patch.
+      git(inspection.root, ["reset", "--hard", inspection.head]);
+    }
 
     try {
       applyRepositoryProposal(inspection.root, proposal);
     } catch (error) {
-      return { status: "REPROVADO", inspection, branchName: options.branchName, proposalHash, baseline, finalTests: baseline, report: `Proposta bloqueada: ${(error as Error).message}` };
+      return {
+        status: "REPROVADO", inspection, branchName: options.branchName, proposalHash,
+        baseline, finalTests: lastTests,
+        report: `Proposta bloqueada antes da execução: ${(error as Error).message}. Nenhum arquivo da proposta foi parcialmente aplicado.`,
+      };
     }
 
-    const finalTests = await testRunner(inspection.root, options.timeoutMs);
+    const finalTests = await candidateRunner(inspection.root, options.timeoutMs);
+    lastTests = finalTests;
     if (!finalTests.ok) {
-      if (attempt === maxAttempts) {
-        const { diff, diffHash } = repositoryDiff(inspection.root);
-        return { status: "REPROVADO", inspection, branchName: options.branchName, proposalHash, diffHash, diff, baseline, finalTests, report: `A proposta passou por ${attempt} tentativa(s), mas os testes ainda falham.` };
-      }
-      continue;
+      if (attempt < maxAttempts) continue;
+      const { diff, diffHash } = repositoryDiff(inspection.root);
+      return {
+        status: "REPROVADO", inspection, branchName: options.branchName,
+        proposalHash, diffHash, diff, baseline, finalTests,
+        report: `Limite de ${maxAttempts} tentativas atingido. Os testes da proposta continuam reprovados; nada foi publicado.`,
+      };
     }
 
     const { diff, diffHash } = repositoryDiff(inspection.root);
     if (!diff.trim()) {
-      return { status: "REPROVADO", inspection, branchName: options.branchName, proposalHash, diffHash, diff, baseline, finalTests, report: "A proposta não produziu diferenças verificáveis." };
-    }
-    const approved = await options.authorizePublish({ proposal, proposalHash, diffHash, diff, branchName: options.branchName });
-    if (!approved) {
-      return { status: "APROVACAO_RECUSADA", inspection, branchName: options.branchName, proposalHash, diffHash, diff, baseline, finalTests, report: "Os testes passaram, mas a publicação foi recusada. Nenhuma alteração foi enviada ao GitHub." };
+      return {
+        status: "REPROVADO", inspection, branchName: options.branchName,
+        proposalHash, diffHash, diff, baseline, finalTests,
+        report: "A proposta não produziu diferenças verificáveis.",
+      };
     }
 
-    git(inspection.root, ["-c", "user.name=Lucky", "-c", "user.email=lucky@localhost", "add", "--all"]);
-    git(inspection.root, ["-c", "user.name=Lucky", "-c", "user.email=lucky@localhost", "diff", "--cached", "--check"]);
+    const approved = await options.authorizePublish({
+      proposal, proposalHash, diffHash, diff, branchName: options.branchName,
+    });
+    // Re-check the exact staged content after the human decision.
+    const afterApproval = repositoryDiff(inspection.root);
+    if (afterApproval.diffHash !== diffHash) {
+      return {
+        status: "REPROVADO", inspection, branchName: options.branchName,
+        proposalHash, diffHash: afterApproval.diffHash, diff: afterApproval.diff,
+        baseline, finalTests,
+        report: "O diff mudou durante a aprovação. A publicação foi bloqueada.",
+      };
+    }
+    if (!approved) {
+      return {
+        status: "APROVACAO_RECUSADA", inspection, branchName: options.branchName,
+        proposalHash, diffHash, diff, baseline, finalTests,
+        report: "Os testes passaram, mas a publicação foi recusada. Nenhuma alteração foi enviada ao GitHub.",
+      };
+    }
+
+    git(inspection.root, ["add", "--all"]);
+    git(inspection.root, ["diff", "--cached", "--check"]);
     git(inspection.root, ["-c", "user.name=Lucky", "-c", "user.email=lucky@localhost", "commit", "-m", `Lucky: ${proposal.summary}`]);
 
     if (options.publishBranch) {
@@ -277,17 +326,15 @@ export async function runRepositoryDevelopmentCycle(options: RepositoryDevelopme
     }
 
     return {
-      status: "VALIDADO_APROVADO",
-      inspection,
-      branchName: options.branchName,
-      proposalHash,
-      diffHash,
-      diff,
-      baseline,
-      finalTests,
+      status: "VALIDADO_APROVADO", inspection, branchName: options.branchName,
+      proposalHash, diffHash, diff, baseline, finalTests,
       report: `Alteração validada e publicada somente na branch ${options.branchName}. Nenhum merge em ${baseBranch} foi realizado.`,
     };
   }
 
-  return { status: "REPROVADO", inspection, branchName: options.branchName, baseline, finalTests: baseline, report: "Limite de tentativas atingido." };
+  return {
+    status: "REPROVADO", inspection, branchName: options.branchName,
+    baseline, finalTests: lastTests,
+    report: "O ciclo foi encerrado sem uma proposta aprovada.",
+  };
 }
