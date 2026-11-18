@@ -38,6 +38,7 @@ import androidx.lifecycle.lifecycleScope
 import com.edrielton.lucky.ai.NvidiaConfigStore
 import com.edrielton.lucky.ai.NvidiaNimClient
 import com.edrielton.lucky.core.LuckyCapabilities
+import com.edrielton.lucky.core.LuckyCapability
 import com.edrielton.lucky.core.LuckyKernel
 import com.edrielton.lucky.development.StagedCorrection
 import com.edrielton.lucky.development.SupervisedDevelopment
@@ -56,6 +57,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var kernel: LuckyKernel
     private lateinit var development: SupervisedDevelopment
     private lateinit var updateManager: UpdateManager
+    var runtimeCapabilities by mutableStateOf(LuckyCapabilities.all)
+        private set
     var updateStatus by mutableStateOf("Atualizador aguardando verificação.")
         private set
     var updateBusy by mutableStateOf(false)
@@ -89,6 +92,7 @@ class MainActivity : ComponentActivity() {
         kernel = LuckyKernel(applicationContext)
         development = SupervisedDevelopment(applicationContext, kernel)
         updateManager = UpdateManager(applicationContext)
+        runtimeCapabilities = updateManager.loadCapabilities()
         nvidiaStore = NvidiaConfigStore(applicationContext)
         nvidia = NvidiaNimClient(nvidiaStore)
         nvidiaConfigured = nvidiaStore.hasKey()
@@ -126,6 +130,7 @@ class MainActivity : ComponentActivity() {
                     onTestNano = ::testNano2,
                     onGenerateCorrection = ::generateCorrection,
                     onApproveCorrection = ::approveCorrection,
+                    runtimeCapabilities = runtimeCapabilities,
                     updateStatus = updateStatus,
                     updateBusy = updateBusy,
                     onCheckUpdates = ::checkUpdates
@@ -142,6 +147,7 @@ class MainActivity : ComponentActivity() {
             updateStatus = "Consultando o canal estável e validando os pacotes..."
             try {
                 val result = withContext(Dispatchers.IO) { updateManager.checkAndApply() }
+                runtimeCapabilities = updateManager.loadCapabilities()
                 updateStatus = result.message + if (result.updatedFiles.isNotEmpty()) {
                     "\nArquivos: " + result.updatedFiles.joinToString()
                 } else ""
@@ -347,6 +353,7 @@ private fun LuckyMobileApp(
     onTestNano: (String) -> Unit,
     onGenerateCorrection: (String, String) -> Unit,
     onApproveCorrection: (StagedCorrection) -> Unit,
+    runtimeCapabilities: List<LuckyCapability>,
     updateStatus: String,
     updateBusy: Boolean,
     onCheckUpdates: () -> Unit
@@ -378,7 +385,7 @@ private fun LuckyMobileApp(
                     3 -> DevelopmentSection(developmentStatus, isDeveloping, stagedCorrection, development.sandboxRoot(), onGenerateCorrection, onApproveCorrection)
                     4 -> MoreSection(onNavigate = { selectedSection = it })
                     5 -> MemorySection(memories.map { it.title to it.body }, onAdd = { title, body -> kernel.addMemory(title, body); refresh++ })
-                    6 -> CapabilitySection()
+                    6 -> CapabilitySection(runtimeCapabilities)
                     7 -> SecuritySection(emergency, audit, onEmergency = { kernel.updateEmergencyStop(it); refresh++ })
                     8 -> NvidiaSection(status = nvidiaStatus, configured = nvidiaConfigured, baseUrlValue = nvidiaBaseUrl, modelValue = nvidiaModel, onSave = onSaveNvidia, onTest = onTestNvidia)
                     9 -> UpdateSection(updateStatus, updateBusy, onCheckUpdates)
@@ -591,10 +598,10 @@ private fun UpdateSection(status: String, busy: Boolean, onCheck: () -> Unit) {
 }
 
 @Composable
-private fun CapabilitySection() {
+private fun CapabilitySection(capabilities: List<LuckyCapability>) {
     Text("Capacidades internas do Lucky", style = MaterialTheme.typography.titleLarge)
     Text("Existe um único sistema: Lucky. Estas são responsabilidades internas do núcleo, não ministros ou agentes independentes.")
-    LuckyCapabilities.all.forEach { capability ->
+    capabilities.forEach { capability ->
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
