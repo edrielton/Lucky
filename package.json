@@ -12,6 +12,7 @@
     "selftest": "node --experimental-strip-types --no-warnings src/testing/cli.ts",
     "typecheck": "tsc --noEmit",
     "bridge": "node --experimental-strip-types --no-warnings src/bridge/server.ts",
+    "develop": "node --experimental-strip-types --no-warnings src/development/cli.ts",
     "qa": "node --experimental-strip-types --no-warnings src/testing/quality-cli.ts",
     "verify:integrity": "node --experimental-strip-types --no-warnings scripts/verify-integrity.ts"
   },

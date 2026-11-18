@@ -1,20 +1,30 @@
-# Autocorreção supervisionada
+# Lucky — Autodesenvolvimento supervisionado via Git
 
-O comando interativo `autocorrigir` chama `runSupervisedCorrection` e segue este fluxo:
+O módulo `src/development/repository.ts` transforma uma base demonstrativa em um ciclo operacional para alterações no próprio repositório:
 
-1. Confirma que a raiz é um projeto `lucky` e cria uma cópia temporária, sem `.git`, `node_modules`, arquivos `.env*` ou links simbólicos.
-2. Executa a suíte de testes existente. Se ela já passar, encerra sem solicitar ou aplicar mudanças.
-3. Se houver falhas, envia ao modelo configurado um contexto limitado das fontes e do relatório de falhas, e aceita somente uma proposta JSON de tamanho limitado.
-4. Exibe o resumo, os caminhos e o conteúdo da proposta. Só aplica a proposta na cópia depois da confirmação `EXECUTAR <12 primeiros caracteres do SHA-256>`, vinculada ao conteúdo exato revisado.
-5. Executa novamente a suíte de testes, limitado a três tentativas.
-6. Se os testes passarem, solicita a revisão humana `APROVAR <12 primeiros caracteres do SHA-256>` para a mesma proposta. Esta decisão não copia arquivos para o projeto original e não publica nada.
+1. inspeciona o checkout e verifica estado limpo;
+2. executa a suíte base;
+3. recebe uma proposta técnica estruturada;
+4. cria uma branch `lucky/*` a partir de `main`;
+5. aplica somente alterações permitidas na cópia/branch isolada;
+6. executa testes reais;
+7. calcula um diff e dois hashes: proposta e diff;
+8. exige aprovação explícita para publicar;
+9. cria um commit local;
+10. envia somente a branch aprovada ao GitHub;
+11. nunca faz merge automático em `main`.
 
-## Segurança e limitações
+Proteções atuais:
 
-- O modelo não é obrigatório para o funcionamento normal do Lucky. Para gerar propostas de reparo é necessário configurar um provedor; a configuração recomendada sem API remota é um modelo local, por exemplo Ollama ou LM Studio.
-- Cada etapa exibe e verifica o hash SHA-256 da proposta; qualquer divergência entre conteúdo apresentado e conteúdo executado cancela o ciclo.
-- O fluxo automático não pode alterar testes, kernel de segurança, executor de testes, quality gate, metadados de dependências ou arquivos críticos de permissões da extensão; também não cria arquivos novos.
-- A aprovação para executar uma proposta é separada da revisão final. Uma proposta recusada não é aplicada nem testada.
-- Caminhos absolutos, traversal, links simbólicos, arquivos `.env*`, diretórios `.git`/`node_modules`, duplicatas e alterações em testes existentes são bloqueados. Há limites de quantidade e tamanho das mudanças e do contexto enviado ao modelo.
-- A cópia temporária **não** constitui isolamento de sistema operacional. Após a confirmação `EXECUTAR`, código de teste alterado executa com as permissões da conta do usuário. Para código não confiável, use contêiner/VM ou usuário restrito antes de usar este ciclo.
-- A cópia fica no diretório temporário para inspeção manual. Não há promoção, commit nem publicação automática.
+- recusar checkout sujo ou branch principal como branch ativa;
+- impedir nome de branch principal;
+- bloquear `.git`, `node_modules`, arquivos `.env*`, segurança, testes e metadados críticos;
+- bloquear traversal, links simbólicos e arquivos protegidos;
+- limitar uma proposta a 30 arquivos e 1 MB por arquivo;
+- não publicar se o usuário negar a aprovação;
+- não publicar se os testes ainda falharem.
+
+Limitação atual:
+
+- a publicação padrão executa `git push`; ela não cria pull request nem faz merge.
+- um provedor externo pode gerar a proposta, mas o candidato sempre passa pelas verificações e aprovações locais.
