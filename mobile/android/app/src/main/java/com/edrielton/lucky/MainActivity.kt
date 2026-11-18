@@ -47,7 +47,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val sections = listOf("Painel", "Chat", "Missões", "Evolução", "Memória", "Conselho", "Segurança", "API")
+private val sections = listOf("Painel", "Chat", "Missões", "Evolução", "Mais")
 
 class MainActivity : ComponentActivity() {
     private var generativeModel: GenerativeModel? = null
@@ -300,7 +300,7 @@ private fun LuckyMobileApp(
     Scaffold(bottomBar = {
         NavigationBar {
             sections.forEachIndexed { index, label ->
-                NavigationBarItem(selected = selectedSection == index, onClick = { selectedSection = index }, icon = { Text(label.take(1)) }, label = { Text(label) })
+                NavigationBarItem(selected = (if (selectedSection >= 4) 4 else selectedSection) == index, onClick = { selectedSection = if (index == 4) 4 else index }, icon = { Text(label.take(1)) }, label = { Text(label) })
             }
         }
     }) { padding ->
@@ -315,10 +315,11 @@ private fun LuckyMobileApp(
                     1 -> ChatSection(nanoStatus, nanoReply, isTestingNano, nvidiaConfigured, onSendChat)
                     2 -> MissionsSection(missions.map { Triple(it.id, it.title, it.status) }, onAdd = { title, detail -> kernel.addMission(title, detail); refresh++ }, onAdvance = { id, status -> kernel.updateMission(id, status); refresh++ })
                     3 -> DevelopmentSection(developmentStatus, isDeveloping, stagedCorrection, development.sandboxRoot(), onGenerateCorrection, onApproveCorrection)
-                    4 -> MemorySection(memories.map { it.title to it.body }, onAdd = { title, body -> kernel.addMemory(title, body); refresh++ })
-                    5 -> CouncilSection()
-                    6 -> SecuritySection(emergency, audit, onEmergency = { kernel.updateEmergencyStop(it); refresh++ })
-                    7 -> NvidiaSection(nvidiaStatus, nvidiaConfigured, onSaveNvidia, onTestNvidia)
+                    4 -> MoreSection(onNavigate = { selectedSection = it })
+                    5 -> MemorySection(memories.map { it.title to it.body }, onAdd = { title, body -> kernel.addMemory(title, body); refresh++ })
+                    6 -> CouncilSection()
+                    7 -> SecuritySection(emergency, audit, onEmergency = { kernel.updateEmergencyStop(it); refresh++ })
+                    8 -> NvidiaSection(nvidiaStatus, nvidiaConfigured, onSaveNvidia, onTestNvidia)
                 }
                 Text("Registros atualizados: $refresh", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -495,4 +496,17 @@ private fun CouncilSection() {
     }
     Text("Motores planejados (registro de arquitetura; ainda não são agentes executáveis)", style = MaterialTheme.typography.titleMedium)
     CouncilRegistry.plannedEngines.forEach { Text("• $it") }
+}
+
+@Composable
+private fun MoreSection(onNavigate: (Int) -> Unit) {
+    Text("Sistemas do núcleo", style = MaterialTheme.typography.titleLarge)
+    listOf("Memória persistente", "Conselho de ministros", "Segurança e auditoria", "Provedor NVIDIA NIM").forEachIndexed { index, title ->
+        Card(Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                Button(onClick = { onNavigate(index + 5) }) { Text("Abrir") }
+            }
+        }
+    }
 }
