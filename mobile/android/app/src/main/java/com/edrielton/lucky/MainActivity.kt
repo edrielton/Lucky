@@ -282,6 +282,11 @@ private fun LuckyMobileApp(
     developmentStatus: String,
     isDeveloping: Boolean,
     stagedCorrection: StagedCorrection?,
+    nvidiaStatus: String,
+    nvidiaConfigured: Boolean,
+    onSaveNvidia: (String, String, String) -> Unit,
+    onTestNvidia: () -> Unit,
+    onSendChat: (String) -> Unit,
     onTestNano: (String) -> Unit,
     onGenerateCorrection: (String, String) -> Unit,
     onApproveCorrection: (StagedCorrection) -> Unit
@@ -305,12 +310,10 @@ private fun LuckyMobileApp(
                 modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Text("LUCKY", style = MaterialTheme.typography.headlineMedium)
-                Text("Núcleo pessoal • Android", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                CoreStatusCard(emergency)
+                PanelHeader(emergency, nvidiaConfigured)
                 when (selectedSection) {
                     0 -> HomeSection(missions.size, memories.size, emergency)
-                    1 -> ChatSection(nanoStatus, nanoReply, isTestingNano, onTestNano)
+                    1 -> ChatSection(nanoStatus, nanoReply, isTestingNano, nvidiaConfigured, onSendChat)
                     2 -> MissionsSection(missions.map { Triple(it.id, it.title, it.status) }, onAdd = { title, detail -> kernel.addMission(title, detail); refresh++ }, onAdvance = { id, status -> kernel.updateMission(id, status); refresh++ })
                     3 -> DevelopmentSection(developmentStatus, isDeveloping, stagedCorrection, development.sandboxRoot(), onGenerateCorrection, onApproveCorrection)
                     4 -> MemorySection(memories.map { it.title to it.body }, onAdd = { title, body -> kernel.addMemory(title, body); refresh++ })
@@ -347,12 +350,12 @@ private fun HomeSection(missionCount: Int, memoryCount: Int, emergency: Boolean)
 }
 
 @Composable
-private fun ChatSection(status: String, reply: String, busy: Boolean, onTest: (String) -> Unit) {
+private fun ChatSection(status: String, reply: String, busy: Boolean, nvidiaConfigured: Boolean, onTest: (String) -> Unit) {
     var prompt by remember { mutableStateOf("Olá, Lucky. Responda em português.") }
     Text("Inteligência local", style = MaterialTheme.typography.titleLarge)
-    Text("Teste de inferência pelo ML Kit GenAI Prompt / Android AICore.")
+    Text(if (nvidiaConfigured) "Provedor ativo: NVIDIA NIM (cloud)." else "Provedor ativo: Gemini Nano (local), quando disponível.")
     OutlinedTextField(value = prompt, onValueChange = { prompt = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Mensagem") }, minLines = 3)
-    Button(onClick = { onTest(prompt) }, enabled = !busy && prompt.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Processando..." else "Enviar ao Nano") }
+    Button(onClick = { onTest(prompt) }, enabled = !busy && prompt.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Processando..." else "Enviar para Lucky") }
     Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(status); if (reply.isNotBlank()) Text(reply) } }
 }
 
@@ -434,4 +437,61 @@ private fun SecuritySection(emergency: Boolean, audit: List<String>, onEmergency
     }
     Button(onClick = { showAudit = !showAudit }) { Text(if (showAudit) "Ocultar auditoria" else "Mostrar auditoria") }
     if (showAudit) audit.take(100).forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
+}
+
+
+@Composable
+private fun PanelHeader(emergency: Boolean, nvidia: Boolean) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFF0B1726))) {
+        Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("LUXION INTERFACE", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text("NÚCLEO LUCKY", style = MaterialTheme.typography.headlineSmall)
+                Text(if (emergency) "ESTADO: EMERGÊNCIA" else "ESTADO: ONLINE", color = if (emergency) androidx.compose.ui.graphics.Color(0xFFFF6B78) else MaterialTheme.colorScheme.primary)
+                Text(if (nvidia) "IA: NVIDIA NIM" else "IA: GEMINI NANO / LOCAL", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            androidx.compose.foundation.Canvas(Modifier.padding(8.dp).height(78.dp).weight(0.7f)) {
+                val center = androidx.compose.ui.geometry.Offset(size.width / 2, size.height / 2)
+                drawCircle(androidx.compose.ui.graphics.Color(0xFF62E8F2).copy(alpha = 0.08f), size.minDimension * 0.48f, center)
+                drawCircle(androidx.compose.ui.graphics.Color(0xFF62E8F2), size.minDimension * 0.34f, center, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
+                drawCircle(androidx.compose.ui.graphics.Color(0xFFB49BFF), size.minDimension * 0.18f, center)
+                drawCircle(androidx.compose.ui.graphics.Color.White, size.minDimension * 0.07f, center)
+            }
+        }
+    }
+}
+
+@Composable
+private fun NvidiaSection(status: String, configured: Boolean, onSave: (String, String, String) -> Unit, onTest: () -> Unit) {
+    var apiKey by remember { mutableStateOf("") }
+    var baseUrl by remember { mutableStateOf("https://integrate.api.nvidia.com/v1") }
+    var model by remember { mutableStateOf("meta/llama-3.1-70b-instruct") }
+    Text("Provedor de inteligência", style = MaterialTheme.typography.titleLarge)
+    Text("Configure NVIDIA NIM. A chave é criptografada com Android Keystore e não é exibida novamente depois de salva.")
+    OutlinedTextField(apiKey, { apiKey = it }, modifier = Modifier.fillMaxWidth(), label = { Text(if (configured) "Nova chave API (deixe vazio para manter)" else "Chave API NVIDIA") }, singleLine = true)
+    OutlinedTextField(baseUrl, { baseUrl = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Base URL HTTPS") }, singleLine = true)
+    OutlinedTextField(model, { model = it }, modifier = Modifier.fillMaxWidth(), label = { Text("ID do modelo NVIDIA NIM") }, singleLine = true)
+    Button(onClick = { onSave(apiKey, baseUrl, model); apiKey = "" }, modifier = Modifier.fillMaxWidth()) { Text("Salvar configuração") }
+    Button(onClick = onTest, enabled = configured, modifier = Modifier.fillMaxWidth()) { Text("Testar conexão NVIDIA") }
+    Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(if (configured) "CHAVE CONFIGURADA" else "AGUARDANDO CHAVE", color = MaterialTheme.colorScheme.primary)
+        Text(status)
+    } }
+    Text("Endpoint padrão: integrate.api.nvidia.com/v1/chat/completions. O uso depende da sua conta, créditos/limites e de um modelo habilitado no NVIDIA NIM.", style = MaterialTheme.typography.bodySmall)
+}
+
+@Composable
+private fun CouncilSection() {
+    Text("Conselho do Lucky", style = MaterialTheme.typography.titleLarge)
+    Text("Presidência: ${CouncilRegistry.president}")
+    CouncilRegistry.ministers.forEachIndexed { index, minister ->
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(12.dp)) {
+                Text("${index + 1}. ${minister.name}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+                Text(minister.responsibility)
+            }
+        }
+    }
+    Text("Motores planejados (registro de arquitetura; ainda não são agentes executáveis)", style = MaterialTheme.typography.titleMedium)
+    CouncilRegistry.plannedEngines.forEach { Text("• $it") }
 }
