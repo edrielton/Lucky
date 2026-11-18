@@ -10,11 +10,10 @@ import {
   inspectRepository,
   runRepositoryDevelopmentCycle,
   type RepositoryProposal,
-  type RepositoryDevelopmentOptions,
 } from "../src/development/repository.ts";
 
-function git(root: string, ...args: string[]): void {
-  execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: "pipe" });
+function git(root: string, ...args: string[]): string {
+  return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: "pipe" }).trim();
 }
 
 function fixture(): string {
@@ -32,88 +31,126 @@ function fixture(): string {
   return root;
 }
 
-const failedTests = {
-  ok: false,
+const passedTests = {
+  ok: true,
   isolation: "host" as const,
-  exitCode: 1,
+  exitCode: 0,
   signal: null,
   timedOut: false,
   durationMs: 1,
   testFiles: ["test/sample.test.js"],
-  output: "falha simulada",
-  report: "REPROVADO",
+  output: "# tests 1\n",
+  report: "APROVADO",
 };
 
-const passedTests = { ...failedTests, ok: true, exitCode: 0, report: "APROVADO" };
+const failedTests = { ...passedTests, ok: false, exitCode: 1, output: "falha simulada", report: "REPROVADO" };
 
-test("desenvolvimento Git rejeita checkout sujo e alterações em main", () => {
+test("inspeção identifica branch, HEAD, arquivos e estado sujo", () => {
   const root = fixture();
   const inspection = inspectRepository(root, "main");
   assert.equal(inspection.currentBranch, "main");
+  assert.equal(inspection.dirty, false);
+  assert.equal(inspection.testFiles.length, 1);
   fs.writeFileSync(path.join(root, "local.txt"), "dirty");
-  assert.throws(() => runRepositoryDevelopmentCycle({
-    projectRoot: root,
-    branchName: "lucky/test",
-    goal: "testar",
-    propose: async () => null,
-    authorizePublish: async () => false,
-  }), /alterações locais|checkout/);
+  assert.equal(inspectRepository(root, "main").dirty, true);
 });
 
- test("proposta muda o hash quando conteúdo ou justificativa mudam", () => {
+test("hash da proposta muda quando conteúdo ou justificativa mudam", () => {
   const first: RepositoryProposal = { summary: "ajuste", rationale: "motivo", changes: [{ path: "src/value.txt", content: "good" }] };
   const second: RepositoryProposal = { ...first, changes: [{ path: "src/value.txt", content: "other" }] };
+  const third: RepositoryProposal = { ...first, rationale: "outro motivo" };
   assert.notEqual(hashRepositoryProposal(first), hashRepositoryProposal(second));
+  assert.notEqual(hashRepositoryProposal(first), hashRepositoryProposal(third));
 });
 
-test("patch aplica arquivo na branch isolada e bloqueia testes e segurança", () => {
+test("patch valida todos os caminhos antes de gravar e bloqueia traversal, testes e segurança", () => {
   const root = fixture();
   git(root, "checkout", "-b", "lucky/patch-test");
-  applyRepositoryProposal(root, { summary: "ajuste", rationale: "motivo", changes: [{ path: "src/value.txt", content: "good" }] });
-  assert.equal(fs.readFileSync(path.join(root, "src/value.txt"), "utf8"), "good");
+  assert.throws(() => applyRepositoryProposal(root, {
+    summary: "proposta inválida", rationale: "deve ser atômica",
+    changes: [
+      { path: "src/value.txt", content: "should-not-write" },
+      { path: "../outside.txt", content: "escape" },
+    ],
+  }), /Traversal bloqueado|Caminho fora/i);
+  assert.equal(fs.readFileSync(path.join(root, "src/value.txt"), "utf8"), "bad\n");
   assert.throws(() => applyRepositoryProposal(root, { summary: "bad", rationale: "bad", changes: [{ path: "test/evil.test.js", content: "x" }] }), /testes bloqueada/i);
   assert.throws(() => applyRepositoryProposal(root, { summary: "bad", rationale: "bad", changes: [{ path: "src/kernel/policy.ts", content: "x" }] }), /segurança|bloqueado/i);
 });
 
- test("ciclo valida os testes e não publica quando a aprovação é recusada", async () => {
+test("ciclo não propõe alterações se a suíte de referência falhar", async () => {
   const root = fixture();
-  let published = false;
-  let testCalls = 0;
-  const options: RepositoryDevelopmentOptions = {
+  let proposed = false;
+  const result = await runRepositoryDevelopmentCycle({
     projectRoot: root,
-    branchName: "lucky/functional-cycle",
-    goal: "corrigir value",
-    propose: async () => ({ summary: "corrigir valor", rationale: "A implementação deve usar good.", changes: [{ path: "src/value.txt", content: "good" }] }),
+    branchName: "lucky/baseline-failure",
+    goal: "melhorar o sistema",
+    propose: async () => { proposed = true; return null; },
     authorizePublish: async () => false,
-    testRunner: async () => (++testCalls === 1 ? failedTests : passedTests),
-    publishBranch: async () => { published = true; },
-  };
-  const result = await runRepositoryDevelopmentCycle(options);
-  assert.equal(result.status, "APROVACAO_RECUSADA");
-  assert.equal(published, false);
-  assert.ok(result.proposalHash);
-  assert.ok(result.diffHash);
-  assert.equal(fs.readFileSync(path.join(root, "src/value.txt"), "utf8"), "good");
+    testRunner: async () => failedTests,
+  });
+  assert.equal(result.status, "REPROVADO");
+  assert.equal(proposed, false);
+  assert.equal(git(root, "branch", "--show-current"), "main");
 });
 
- test("ciclo aprovado cria commit local e chama publicador somente após aprovação", async () => {
+test("ciclo cria branch isolada após baseline aprovado e não publica sem autorização", async () => {
   const root = fixture();
   let published = false;
   let testCalls = 0;
   const result = await runRepositoryDevelopmentCycle({
     projectRoot: root,
-    branchName: "lucky/published-cycle",
-    goal: "corrigir value",
-    propose: async () => ({ summary: "corrigir valor", rationale: "A implementação deve usar good.", changes: [{ path: "src/value.txt", content: "good" }] }),
+    branchName: "lucky/functional-cycle",
+    goal: "corrigir o valor",
+    propose: async ({ baseline }) => {
+      assert.equal(baseline.ok, true);
+      return { summary: "corrigir valor", rationale: "O conteúdo correto é good.", changes: [{ path: "src/value.txt", content: "good\n" }] };
+    },
+    authorizePublish: async ({ proposalHash, diffHash, diff }) => {
+      assert.match(proposalHash, /^[a-f0-9]{64}$/);
+      assert.match(diffHash, /^[a-f0-9]{64}$/);
+      assert.match(diff, /good/);
+      return false;
+    },
+    testRunner: async () => { testCalls++; return passedTests; },
+    publishBranch: async () => { published = true; },
+  });
+  assert.equal(result.status, "APROVACAO_RECUSADA");
+  assert.equal(testCalls, 2);
+  assert.equal(published, false);
+  assert.ok(result.proposalHash);
+  assert.ok(result.diffHash);
+  assert.equal(git(root, "branch", "--show-current"), "lucky/functional-cycle");
+  assert.equal(fs.readFileSync(path.join(root, "src/value.txt"), "utf8"), "good\n");
+});
+
+test("ciclo restaura a base entre tentativas e só publica após aprovação", async () => {
+  const root = fixture();
+  let testCalls = 0;
+  let proposalCalls = 0;
+  let published = false;
+  const result = await runRepositoryDevelopmentCycle({
+    projectRoot: root,
+    branchName: "lucky/retry-cycle",
+    goal: "corrigir valor",
+    maxAttempts: 2,
+    propose: async ({ baseline }) => {
+      proposalCalls++;
+      assert.equal(baseline.ok, proposalCalls === 1 ? true : false);
+      return { summary: `correção ${proposalCalls}`, rationale: "ajuste mínimo", changes: [{ path: "src/value.txt", content: `good-${proposalCalls}\n` }] };
+    },
     authorizePublish: async () => true,
-    testRunner: async () => (++testCalls === 1 ? failedTests : passedTests),
+    testRunner: async () => (++testCalls === 2 ? failedTests : passedTests),
     publishBranch: async (publishedRoot, branchName) => {
       published = true;
-      assert.equal(branchName, "lucky/published-cycle");
-      assert.equal(git(publishedRoot, "branch", "--show-current"), undefined);
+      assert.equal(branchName, "lucky/retry-cycle");
+      assert.equal(git(publishedRoot, "branch", "--show-current"), "lucky/retry-cycle");
     },
   });
   assert.equal(result.status, "VALIDADO_APROVADO");
+  assert.equal(proposalCalls, 2);
+  assert.equal(testCalls, 3);
   assert.equal(published, true);
-  assert.equal(git(root, "branch", "--show-current"), undefined);
+  assert.equal(fs.readFileSync(path.join(root, "src/value.txt"), "utf8"), "good-2\n");
+  assert.equal(git(root, "log", "-1", "--pretty=%s"), "Lucky: correção 2");
 });
