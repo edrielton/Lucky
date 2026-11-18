@@ -133,7 +133,8 @@ class MainActivity : ComponentActivity() {
                     runtimeCapabilities = runtimeCapabilities,
                     updateStatus = updateStatus,
                     updateBusy = updateBusy,
-                    onCheckUpdates = ::checkUpdates
+                    onCheckUpdates = ::checkUpdates,
+                    onRollbackUpdates = ::rollbackUpdates
                 )
             }
         }
@@ -155,6 +156,25 @@ class MainActivity : ComponentActivity() {
             } catch (error: Exception) {
                 updateStatus = "Falha na atualização: ${error.message ?: error::class.java.simpleName}"
                 kernel.audit("UPDATE_ERROR", updateStatus)
+            } finally {
+                updateBusy = false
+            }
+        }
+    }
+
+    private fun rollbackUpdates() {
+        if (updateBusy) return
+        lifecycleScope.launch {
+            updateBusy = true
+            updateStatus = "Restaurando o pacote anterior..."
+            try {
+                val result = withContext(Dispatchers.IO) { updateManager.rollbackLastUpdate() }
+                runtimeCapabilities = updateManager.loadCapabilities()
+                updateStatus = result.message
+                kernel.audit("UPDATE_ROLLBACK", updateStatus)
+            } catch (error: Exception) {
+                updateStatus = "Falha no rollback: ${error.message ?: error::class.java.simpleName}"
+                kernel.audit("UPDATE_ROLLBACK_ERROR", updateStatus)
             } finally {
                 updateBusy = false
             }
@@ -356,7 +376,8 @@ private fun LuckyMobileApp(
     runtimeCapabilities: List<LuckyCapability>,
     updateStatus: String,
     updateBusy: Boolean,
-    onCheckUpdates: () -> Unit
+    onCheckUpdates: () -> Unit,
+    onRollbackUpdates: () -> Unit
 ) {
     var selectedSection by remember { mutableIntStateOf(0) }
     var refresh by remember { mutableIntStateOf(0) }
@@ -388,7 +409,7 @@ private fun LuckyMobileApp(
                     6 -> CapabilitySection(runtimeCapabilities)
                     7 -> SecuritySection(emergency, audit, onEmergency = { kernel.updateEmergencyStop(it); refresh++ })
                     8 -> NvidiaSection(status = nvidiaStatus, configured = nvidiaConfigured, baseUrlValue = nvidiaBaseUrl, modelValue = nvidiaModel, onSave = onSaveNvidia, onTest = onTestNvidia)
-                    9 -> UpdateSection(updateStatus, updateBusy, onCheckUpdates)
+                    9 -> UpdateSection(updateStatus, updateBusy, onCheckUpdates, onRollbackUpdates)
                 }
                 Text("Registros atualizados: $refresh", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -581,7 +602,7 @@ private fun NvidiaSection(status: String, configured: Boolean, baseUrlValue: Str
 }
 
 @Composable
-private fun UpdateSection(status: String, busy: Boolean, onCheck: () -> Unit) {
+private fun UpdateSection(status: String, busy: Boolean, onCheck: () -> Unit, onRollback: () -> Unit) {
     Text("Atualizações do Lucky", style = MaterialTheme.typography.titleLarge)
     Text("O aplicativo verifica pacotes declarativos em um canal HTTPS. Esses pacotes podem atualizar dados e configurações compatíveis sem reinstalar o APK.")
     Card(Modifier.fillMaxWidth()) {
@@ -589,12 +610,15 @@ private fun UpdateSection(status: String, busy: Boolean, onCheck: () -> Unit) {
             Text("Canal estável", style = MaterialTheme.typography.titleMedium)
             Text(status)
             Button(onClick = onCheck, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                Text(if (busy) "Verificando..." else "Verificar atualizações")
+                Text(if (busy) "Processando..." else "Verificar atualizações")
+            }
+            Button(onClick = onRollback, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                Text("Reverter última atualização")
             }
         }
     }
     Text("Proteções: origem HTTPS fixa, limite de tamanho, caminhos restritos, validação SHA-256 e aplicação com cópia de segurança. O pacote atual contém somente JSON; não executa código baixado.")
-    Text("Limite: alterações em Kotlin, bibliotecas nativas, permissões ou componentes Android ainda exigem uma nova versão do aplicativo. A assinatura criptográfica do manifesto e a integração desses pacotes nas capacidades ativas são etapas futuras.")
+    Text("Limite: alterações em Kotlin, bibliotecas nativas, permissões ou componentes Android ainda exigem uma nova versão do aplicativo. O manifesto ainda não possui assinatura criptográfica; o SHA-256 confirma a integridade do arquivo em relação ao manifesto, mas não autentica quem publicou o manifesto.")
 }
 
 @Composable
