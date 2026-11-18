@@ -51,3 +51,14 @@ Os testes Cloud usam o `node:sqlite` apenas como adaptador D1 de teste, não faz
 - A tabela de aprendizagem pode expor insights, mas o fluxo de análise da aprendizagem local ainda não foi portado para D1.
 - Não há criação/gestão de provedores arbitrários, armazenamento de chaves de terceiros, exportação/exclusão de conta por API, MFA, verificação de e-mail, nem política de retenção. Contas podem ser removidas por operações administrativas no D1; a cadeia de auditoria não é inviolável contra tais operações.
 - A validação automatizada não comprova implantação real no Cloudflare, concorrência distribuída em produção, política de billing, disponibilidade, ou revisão independente de segurança. Não declarar a versão aprovada antes de executar a suíte Cloud, a regressão e os testes de D1 remoto controlado.
+
+## Diagnóstico da implantação
+
+Depois de publicar o Worker, abra `https://SEU-DOMINIO/api/health`:
+- `200` com `database: connected`: a requisição chegou ao Worker e o binding D1 respondeu.
+- `503` com `database: unavailable`: a requisição chegou ao Worker, mas o binding/banco D1 não está utilizável.
+- `404`, HTML estático ou uma resposta de outra plataforma: o domínio/rota provavelmente não está apontando para este Worker.
+- `402`: esta implementação não gera esse status no health check nem no cadastro; verifique o corpo da resposta e os logs da camada que respondeu. Não conclua que é erro de D1 sem evidência.
+
+O endpoint não exige login e não expõe credenciais, IDs de banco ou dados de usuários. Ele é apenas um diagnóstico de disponibilidade.
+
