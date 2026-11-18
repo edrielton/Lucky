@@ -1,13 +1,98 @@
 {
   "schemaVersion": 1,
   "module": "capabilities",
-  "moduleVersion": "1.0.0",
-  "description": "Definições declarativas das capacidades internas do Lucky. Este pacote não contém código executável.",
+  "moduleVersion": "1.0.1",
+  "description": "Catálogo declarativo das capacidades internas do Lucky. Dados sem código executável.",
   "capabilities": [
-    {"id":"strategy","name":"Estratégia","description":"Planejamento e priorização","state":"internal"},
-    {"id":"memory","name":"Memória","description":"Persistência e recuperação de informações","state":"partial"},
-    {"id":"security","name":"Segurança","description":"Permissões, proteção e auditoria","state":"partial"},
-    {"id":"engineering","name":"Engenharia","description":"Manutenção e evolução de software","state":"partial"},
-    {"id":"self-development","name":"Autodesenvolvimento","description":"Inspeção, propostas, validação e atualização supervisionada","state":"in-progress"}
+    {
+      "id": "strategy",
+      "name": "Estratégia",
+      "description": "Planejamento, prioridades e objetivos de longo prazo",
+      "state": "INTERNO"
+    },
+    {
+      "id": "forecast",
+      "name": "Previsão",
+      "description": "Cenários, consequências e avaliação de incerteza",
+      "state": "INTERNO"
+    },
+    {
+      "id": "integration",
+      "name": "Integração",
+      "description": "Coordenação dos módulos e consistência de estado",
+      "state": "INTERNO"
+    },
+    {
+      "id": "engineering",
+      "name": "Engenharia",
+      "description": "Arquitetura, implementação e manutenção de software",
+      "state": "PARCIAL"
+    },
+    {
+      "id": "security",
+      "name": "Segurança",
+      "description": "Políticas, permissões, proteção e resposta a riscos",
+      "state": "PARCIAL"
+    },
+    {
+      "id": "memory",
+      "name": "Memória",
+      "description": "Persistência, recuperação, atualização e histórico",
+      "state": "PARCIAL"
+    },
+    {
+      "id": "analysis",
+      "name": "Análise",
+      "description": "Raciocínio, decomposição e diagnóstico de problemas",
+      "state": "INTERNO"
+    },
+    {
+      "id": "verification",
+      "name": "Verificação",
+      "description": "Auditoria, testes, evidências e detecção de regressões",
+      "state": "PENDENTE"
+    },
+    {
+      "id": "communication",
+      "name": "Comunicação",
+      "description": "Interpretação de intenção e interação com o usuário",
+      "state": "INTERNO"
+    },
+    {
+      "id": "research",
+      "name": "Pesquisa",
+      "description": "Aquisição e organização de conhecimento",
+      "state": "DEPENDENTE_DO_PROVEDOR"
+    },
+    {
+      "id": "observability",
+      "name": "Observabilidade",
+      "description": "Monitoramento de estado, eventos e desempenho",
+      "state": "PARCIAL"
+    },
+    {
+      "id": "planning",
+      "name": "Planejamento",
+      "description": "Sequenciamento, prazos e gestão de missões",
+      "state": "PARCIAL"
+    },
+    {
+      "id": "governance",
+      "name": "Governança",
+      "description": "Aprovação humana, políticas e trilha de auditoria",
+      "state": "PARCIAL"
+    },
+    {
+      "id": "resource-management",
+      "name": "Gestão de recursos",
+      "description": "Uso de memória, processamento, armazenamento e limites",
+      "state": "PENDENTE"
+    },
+    {
+      "id": "self-development",
+      "name": "Autodesenvolvimento",
+      "description": "Inspeção de projeto, alterações isoladas, execução de testes e promoção aprovada",
+      "state": "NAO_IMPLEMENTADO"
+    }
   ]
 }
