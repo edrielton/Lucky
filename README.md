@@ -116,3 +116,23 @@ Essa proteção é **detecção de adulteração**, não DRM nem isolamento invi
 4. Só execute `autocorrigir` quando o comando `sandbox` indicar que Docker e a imagem local estão disponíveis.
 
 O Lucky não baixa imagens automaticamente. O contêiner de testes não recebe acesso à rede; o download manual da imagem ocorre antes da execução. A disponibilidade do Docker não substitui a revisão humana nem torna o sistema invulnerável.
+
+## Autodesenvolvimento do repositório (experimental)
+
+O comando `npm run develop` inicia um ciclo local supervisionado para propor alterações no próprio repositório:
+
+```powershell
+$env:LUCKY_PROVIDER="ollama"
+$env:LUCKY_MODEL="qwen3:4b"
+npm run develop -- --goal "Descreva aqui a melhoria desejada"
+```
+
+O fluxo exige checkout limpo na branch-base (por padrão, `main`), executa a suíte de referência, cria uma branch `lucky/*`, aplica uma proposta limitada, testa o candidato e mostra o diff. O candidato é testado em Docker sem rede; se Docker/imagem não estiverem disponíveis, o ciclo falha fechado. O push só ocorre após a confirmação explícita do hash do diff.
+
+Limites importantes:
+- É um recurso experimental do núcleo local; ainda não está conectado ao aplicativo Android nem ao Lucky Cloud.
+- O modelo apenas propõe alterações. O processo local valida caminhos, protege testes/segurança/CI e executa os testes separadamente.
+- O fluxo publica somente uma branch remota; não cria PR nem faz merge em `main`.
+- A execução de testes da base é local; a execução de código candidato exige Docker.
+- Não configure segredos no prompt nem envie arquivos `.env` ao modelo.
+
