@@ -90,8 +90,8 @@ class UpdateManager(context: Context) {
                         check(targetFile.copyTo(backupFile, overwrite = true).exists())
                         backupFile
                     } else null
-                    check(stagedFile.copyTo(targetFile, overwrite = true).exists())
                     replaced += targetFile to previous
+                    check(stagedFile.copyTo(targetFile, overwrite = true).exists())
                 }
                 prefs.edit().putString("installed_version", version).apply()
             } catch (error: Exception) {
