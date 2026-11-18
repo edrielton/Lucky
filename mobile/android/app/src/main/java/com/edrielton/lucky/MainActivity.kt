@@ -17,6 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -59,6 +60,10 @@ class MainActivity : ComponentActivity() {
         private set
     var nvidiaConfigured by mutableStateOf(false)
         private set
+    var nvidiaBaseUrl by mutableStateOf("https://integrate.api.nvidia.com/v1")
+        private set
+    var nvidiaModel by mutableStateOf("meta/llama-3.1-8b-instruct")
+        private set
 
     var nanoStatus by mutableStateOf("Aguardando teste do AICore.")
         private set
@@ -80,6 +85,8 @@ class MainActivity : ComponentActivity() {
         nvidiaStore = NvidiaConfigStore(applicationContext)
         nvidia = NvidiaNimClient(nvidiaStore)
         nvidiaConfigured = nvidiaStore.hasKey()
+        nvidiaBaseUrl = nvidiaStore.load().baseUrl
+        nvidiaModel = nvidiaStore.load().model
         generativeModel = Generation.getClient()
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(
@@ -104,6 +111,8 @@ class MainActivity : ComponentActivity() {
                     stagedCorrection = stagedCorrection,
                     nvidiaStatus = nvidiaStatus,
                     nvidiaConfigured = nvidiaConfigured,
+                    nvidiaBaseUrl = nvidiaBaseUrl,
+                    nvidiaModel = nvidiaModel,
                     onSaveNvidia = ::saveNvidiaConfig,
                     onTestNvidia = ::testNvidia,
                     onSendChat = ::sendChat,
@@ -208,6 +217,8 @@ class MainActivity : ComponentActivity() {
         try {
             nvidiaStore.save(if (key.isBlank()) nvidiaStore.load().apiKey else key, baseUrl, model)
             nvidiaConfigured = nvidiaStore.hasKey()
+            nvidiaBaseUrl = nvidiaStore.load().baseUrl
+            nvidiaModel = nvidiaStore.load().model
             nvidiaStatus = if (nvidiaConfigured) "Chave salva com criptografia Android Keystore." else "Configuração salva sem chave."
             kernel.audit("NVIDIA_CONFIG_SAVED", "Endpoint/modelo atualizados; chave presente: $nvidiaConfigured")
         } catch (error: Exception) {
@@ -283,6 +294,8 @@ private fun LuckyMobileApp(
     stagedCorrection: StagedCorrection?,
     nvidiaStatus: String,
     nvidiaConfigured: Boolean,
+    nvidiaBaseUrl: String,
+    nvidiaModel: String,
     onSaveNvidia: (String, String, String) -> Unit,
     onTestNvidia: () -> Unit,
     onSendChat: (String) -> Unit,
@@ -464,13 +477,13 @@ private fun PanelHeader(emergency: Boolean, nvidia: Boolean) {
 }
 
 @Composable
-private fun NvidiaSection(status: String, configured: Boolean, onSave: (String, String, String) -> Unit, onTest: () -> Unit) {
+private fun NvidiaSection(status: String, configured: Boolean, baseUrlValue: String, modelValue: String, onSave: (String, String, String) -> Unit, onTest: () -> Unit) {
     var apiKey by remember { mutableStateOf("") }
-    var baseUrl by remember { mutableStateOf("https://integrate.api.nvidia.com/v1") }
-    var model by remember { mutableStateOf("meta/llama-3.1-8b-instruct") }
+    var baseUrl by remember(baseUrlValue) { mutableStateOf(baseUrlValue) }
+    var model by remember(modelValue) { mutableStateOf(modelValue) }
     Text("Provedor de inteligência", style = MaterialTheme.typography.titleLarge)
     Text("Configure NVIDIA NIM. A chave é criptografada com Android Keystore e não é exibida novamente depois de salva.")
-    OutlinedTextField(apiKey, { apiKey = it }, modifier = Modifier.fillMaxWidth(), label = { Text(if (configured) "Nova chave API (deixe vazio para manter)" else "Chave API NVIDIA") }, singleLine = true)
+    OutlinedTextField(apiKey, { apiKey = it }, modifier = Modifier.fillMaxWidth(), label = { Text(if (configured) "Nova chave API (deixe vazio para manter)" else "Chave API NVIDIA") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
     OutlinedTextField(baseUrl, { baseUrl = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Base URL HTTPS") }, singleLine = true)
     OutlinedTextField(model, { model = it }, modifier = Modifier.fillMaxWidth(), label = { Text("ID do modelo NVIDIA NIM") }, singleLine = true)
     Button(onClick = { onSave(apiKey, baseUrl, model); apiKey = "" }, modifier = Modifier.fillMaxWidth()) { Text("Salvar configuração") }
