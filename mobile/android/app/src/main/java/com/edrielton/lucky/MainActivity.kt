@@ -129,8 +129,8 @@ class MainActivity : ComponentActivity() {
             developmentStatus = "Bloqueado pelo botão de emergência."
             return
         }
-        if (relativePath.isBlank() || source.isBlank()) {
-            developmentStatus = "Informe o caminho relativo e o conteúdo do arquivo."
+        if (relativePath.isBlank() || source.isBlank() || source.length > 30_000) {
+            developmentStatus = "Informe o caminho relativo e o conteúdo (máximo de 30 KB)."
             return
         }
         val model = generativeModel ?: run {
@@ -236,7 +236,7 @@ private fun LuckyMobileApp(
                     2 -> MissionsSection(missions.map { Triple(it.id, it.title, it.status) }, onAdd = { title, detail -> kernel.addMission(title, detail); refresh++ }, onAdvance = { id, status -> kernel.updateMission(id, status); refresh++ })
                     3 -> DevelopmentSection(developmentStatus, isDeveloping, stagedCorrection, development.sandboxRoot(), onGenerateCorrection, onApproveCorrection)
                     4 -> MemorySection(memories.map { it.title to it.body }, onAdd = { title, body -> kernel.addMemory(title, body); refresh++ })
-                    5 -> SecuritySection(emergency, audit, onEmergency = { kernel.setEmergencyStop(it); refresh++ })
+                    5 -> SecuritySection(emergency, audit, onEmergency = { kernel.updateEmergencyStop(it); refresh++ })
                 }
                 Text("Registros atualizados: $refresh", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
