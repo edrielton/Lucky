@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.edrielton.lucky.ai.NvidiaConfigStore
 import com.edrielton.lucky.ai.NvidiaNimClient
-import com.edrielton.lucky.core.CouncilRegistry
+import com.edrielton.lucky.core.LuckyCapabilities
 import com.edrielton.lucky.core.LuckyKernel
 import com.edrielton.lucky.development.StagedCorrection
 import com.edrielton.lucky.development.SupervisedDevelopment
@@ -242,6 +242,20 @@ class MainActivity : ComponentActivity() {
 
     private fun sendChat(prompt: String) {
         if (isTestingNano || prompt.isBlank()) return
+        val normalized = prompt.trim().lowercase().replace(Regex("[.!?,;]+$"), "")
+        val approvalWords = setOf("aprovado", "aprovo", "sim, aprovado", "sim aprovado", "pode executar", "autorizo")
+        if (normalized in approvalWords) {
+            val pending = stagedCorrection
+            if (pending == null) {
+                nanoReply = "Não existe uma proposta de evolução pendente vinculada a esta conversa. Nenhuma alteração foi autorizada ou executada."
+                nanoStatus = "Aprovação não aplicada: nenhuma proposta pendente."
+            } else {
+                approveCorrection(pending)
+                nanoReply = "Aprovação registrada para a proposta ${pending.id}. Ela continua isolada. O aplicativo ainda não executa builds, testes nem promove alterações ao projeto original."
+                nanoStatus = "Aprovação vinculada à proposta ${pending.id}."
+            }
+            return
+        }
         lifecycleScope.launch {
             isTestingNano = true
             nanoReply = ""
@@ -330,7 +344,7 @@ private fun LuckyMobileApp(
                     3 -> DevelopmentSection(developmentStatus, isDeveloping, stagedCorrection, development.sandboxRoot(), onGenerateCorrection, onApproveCorrection)
                     4 -> MoreSection(onNavigate = { selectedSection = it })
                     5 -> MemorySection(memories.map { it.title to it.body }, onAdd = { title, body -> kernel.addMemory(title, body); refresh++ })
-                    6 -> CouncilSection()
+                    6 -> CapabilitySection()
                     7 -> SecuritySection(emergency, audit, onEmergency = { kernel.updateEmergencyStop(it); refresh++ })
                     8 -> NvidiaSection(status = nvidiaStatus, configured = nvidiaConfigured, baseUrlValue = nvidiaBaseUrl, modelValue = nvidiaModel, onSave = onSaveNvidia, onTest = onTestNvidia)
                 }
@@ -525,25 +539,26 @@ private fun NvidiaSection(status: String, configured: Boolean, baseUrlValue: Str
 }
 
 @Composable
-private fun CouncilSection() {
-    Text("Conselho do Lucky", style = MaterialTheme.typography.titleLarge)
-    Text("Presidência: ${CouncilRegistry.president}")
-    CouncilRegistry.ministers.forEachIndexed { index, minister ->
+private fun CapabilitySection() {
+    Text("Capacidades internas do Lucky", style = MaterialTheme.typography.titleLarge)
+    Text("Existe um único sistema: Lucky. Estas são responsabilidades internas do núcleo, não ministros ou agentes independentes.")
+    LuckyCapabilities.all.forEach { capability ->
         Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp)) {
-                Text("${index + 1}. ${minister.name}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
-                Text(minister.responsibility)
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(capability.name, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+                    Text(capability.state, style = MaterialTheme.typography.labelSmall)
+                }
+                Text(capability.responsibility)
             }
         }
     }
-    Text("Motores planejados (registro de arquitetura; ainda não são agentes executáveis)", style = MaterialTheme.typography.titleMedium)
-    CouncilRegistry.plannedEngines.forEach { Text("• $it") }
 }
 
 @Composable
 private fun MoreSection(onNavigate: (Int) -> Unit) {
     Text("Sistemas do núcleo", style = MaterialTheme.typography.titleLarge)
-    listOf("Memória persistente", "Conselho de ministros", "Segurança e auditoria", "Provedor NVIDIA NIM").forEachIndexed { index, title ->
+    listOf("Memória persistente", "Capacidades do Lucky", "Segurança e auditoria", "Provedor NVIDIA NIM").forEachIndexed { index, title ->
         Card(Modifier.fillMaxWidth()) {
             Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
