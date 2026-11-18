@@ -161,20 +161,12 @@ class MainActivity : ComponentActivity() {
             developmentStatus = "Informe o caminho relativo e o conteúdo (máximo de 30 KB)."
             return
         }
-        val model = generativeModel ?: run {
-            developmentStatus = "Cliente AICore não inicializado."
-            return
-        }
+        val model = generativeModel
         lifecycleScope.launch {
             isDeveloping = true
             stagedCorrection = null
-            developmentStatus = "Verificando disponibilidade do modelo local..."
+            developmentStatus = "Selecionando provedor de inteligência..."
             try {
-                val status = withContext(Dispatchers.IO) { model.checkStatus() }
-                if (status != FeatureStatus.AVAILABLE) {
-                    developmentStatus = "Modelo indisponível para geração de proposta (estado: $status)."
-                    return@launch
-                }
                 developmentStatus = "Analisando o código e solicitando uma proposta..."
                 val prompt = """
                     Você é o mecanismo de proposta de correção do Lucky. Analise o arquivo abaixo.
@@ -187,8 +179,15 @@ class MainActivity : ComponentActivity() {
                     CONTEÚDO DO ARQUIVO:
                     $source
                 """.trimIndent()
-                val result = withContext(Dispatchers.IO) { model.generateContent(prompt) }
-                val raw = result.candidates.firstOrNull()?.text.orEmpty()
+                val raw = if (nvidiaStore.hasKey()) {
+                    withContext(Dispatchers.IO) { nvidia.complete(prompt, "Você é o mecanismo de proposta de correção do Lucky. Responda somente com o JSON solicitado.") }
+                } else {
+                    val local = model ?: throw IllegalStateException("Configure NVIDIA NIM ou disponibilize Gemini Nano.")
+                    val status = withContext(Dispatchers.IO) { local.checkStatus() }
+                    if (status != FeatureStatus.AVAILABLE) throw IllegalStateException("AICore indisponível: $status")
+                    val result = withContext(Dispatchers.IO) { local.generateContent(prompt) }
+                    result.candidates.firstOrNull()?.text.orEmpty()
+                }
                 if (raw.isBlank()) {
                     developmentStatus = "O modelo não retornou uma proposta."
                     return@launch
@@ -317,7 +316,9 @@ private fun LuckyMobileApp(
                     2 -> MissionsSection(missions.map { Triple(it.id, it.title, it.status) }, onAdd = { title, detail -> kernel.addMission(title, detail); refresh++ }, onAdvance = { id, status -> kernel.updateMission(id, status); refresh++ })
                     3 -> DevelopmentSection(developmentStatus, isDeveloping, stagedCorrection, development.sandboxRoot(), onGenerateCorrection, onApproveCorrection)
                     4 -> MemorySection(memories.map { it.title to it.body }, onAdd = { title, body -> kernel.addMemory(title, body); refresh++ })
-                    5 -> CouncilSection()\n                    6 -> SecuritySection(emergency, audit, onEmergency = { kernel.updateEmergencyStop(it); refresh++ })
+                    5 -> CouncilSection()
+                    6 -> SecuritySection(emergency, audit, onEmergency = { kernel.updateEmergencyStop(it); refresh++ })
+                    7 -> NvidiaSection(nvidiaStatus, nvidiaConfigured, onSaveNvidia, onTestNvidia)
                 }
                 Text("Registros atualizados: $refresh", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
