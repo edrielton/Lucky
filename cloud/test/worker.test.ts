@@ -214,3 +214,28 @@ test("verificação de auditoria confere o cabeçalho persistido", async () => {
     assert.equal((await verifyAudit(db, user.id)).ok, false);
   } finally { db.close(); }
 });
+
+
+test("health check confirma que a requisição chegou ao Worker e que o D1 responde", async () => {
+  const db = new SqliteD1();
+  try {
+    const response = await call(environment(db), "/api/health");
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      ok: true,
+      service: "lucky-cloud",
+      database: "connected",
+    });
+  } finally { db.close(); }
+});
+
+test("health check falha de forma controlada quando o binding D1 não está disponível", async () => {
+  const env = environment({} as D1Database);
+  const response = await call(env, "/api/health");
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    ok: false,
+    service: "lucky-cloud",
+    database: "unavailable",
+  });
+});
