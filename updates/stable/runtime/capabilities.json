@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "module": "capabilities",
+  "moduleVersion": "1.0.0",
+  "description": "Definições declarativas das capacidades internas do Lucky. Este pacote não contém código executável.",
+  "capabilities": [
+    {"id":"strategy","name":"Estratégia","description":"Planejamento e priorização","state":"internal"},
+    {"id":"memory","name":"Memória","description":"Persistência e recuperação de informações","state":"partial"},
+    {"id":"security","name":"Segurança","description":"Permissões, proteção e auditoria","state":"partial"},
+    {"id":"engineering","name":"Engenharia","description":"Manutenção e evolução de software","state":"partial"},
+    {"id":"self-development","name":"Autodesenvolvimento","description":"Inspeção, propostas, validação e atualização supervisionada","state":"in-progress"}
+  ]
+}
