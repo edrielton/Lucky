@@ -56,7 +56,9 @@ class UpdateManager(context: Context) {
         val version = manifest.getString("version")
         require(version.matches(Regex("\\d+(\\.\\d+){1,3}"))) { "Versão do pacote inválida." }
         val minimumAppCode = manifest.optInt("minAppVersionCode", 1)
-        require(minimumAppCode <= 2) { "Esta atualização exige uma versão mais recente do aplicativo." }
+        @Suppress("DEPRECATION")
+        val installedAppCode = appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionCode
+        require(minimumAppCode <= installedAppCode) { "Esta atualização exige uma versão mais recente do aplicativo." }
 
         val current = installedVersion()
         if (prefs.getString("blocked_version", null) == version) {
