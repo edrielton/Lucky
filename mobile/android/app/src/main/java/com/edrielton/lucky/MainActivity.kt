@@ -332,7 +332,7 @@ private fun LuckyMobileApp(
                     5 -> MemorySection(memories.map { it.title to it.body }, onAdd = { title, body -> kernel.addMemory(title, body); refresh++ })
                     6 -> CouncilSection()
                     7 -> SecuritySection(emergency, audit, onEmergency = { kernel.updateEmergencyStop(it); refresh++ })
-                    8 -> NvidiaSection(nvidiaStatus, nvidiaConfigured, onSaveNvidia, onTestNvidia)
+                    8 -> NvidiaSection(nvidiaStatus, nvidiaConfigured, nvidiaBaseUrl, nvidiaModel, onSaveNvidia, onTestNvidia)
                 }
                 Text("Registros atualizados: $refresh", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
