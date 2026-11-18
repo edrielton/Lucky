@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.edrielton.lucky.core.CouncilRegistry
 import com.edrielton.lucky.core.LuckyKernel
 import com.edrielton.lucky.development.StagedCorrection
 import com.edrielton.lucky.development.SupervisedDevelopment
@@ -43,7 +44,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val sections = listOf("Início", "Chat", "Missões", "Evolução", "Memória", "Segurança")
+private val sections = listOf("Início", "Chat", "Missões", "Evolução", "Memória", "Conselho", "Segurança")
 
 class MainActivity : ComponentActivity() {
     private var generativeModel: GenerativeModel? = null
@@ -236,7 +237,7 @@ private fun LuckyMobileApp(
                     2 -> MissionsSection(missions.map { Triple(it.id, it.title, it.status) }, onAdd = { title, detail -> kernel.addMission(title, detail); refresh++ }, onAdvance = { id, status -> kernel.updateMission(id, status); refresh++ })
                     3 -> DevelopmentSection(developmentStatus, isDeveloping, stagedCorrection, development.sandboxRoot(), onGenerateCorrection, onApproveCorrection)
                     4 -> MemorySection(memories.map { it.title to it.body }, onAdd = { title, body -> kernel.addMemory(title, body); refresh++ })
-                    5 -> SecuritySection(emergency, audit, onEmergency = { kernel.updateEmergencyStop(it); refresh++ })
+                    5 -> CouncilSection()\n                    6 -> SecuritySection(emergency, audit, onEmergency = { kernel.updateEmergencyStop(it); refresh++ })
                 }
                 Text("Registros atualizados: $refresh", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
