@@ -72,7 +72,7 @@ test("patch valida todos os caminhos antes de gravar e bloqueia traversal, teste
       { path: "src/value.txt", content: "should-not-write" },
       { path: "../outside.txt", content: "escape" },
     ],
-  }), /Traversal bloqueado|Caminho fora/i);
+  }), /Traversal.*bloqueado|Caminho fora/i);
   assert.equal(fs.readFileSync(path.join(root, "src/value.txt"), "utf8"), "bad\n");
   assert.throws(() => applyRepositoryProposal(root, { summary: "bad", rationale: "bad", changes: [{ path: "test/evil.test.js", content: "x" }] }), /testes bloqueada/i);
   assert.throws(() => applyRepositoryProposal(root, { summary: "bad", rationale: "bad", changes: [{ path: "src/kernel/policy.ts", content: "x" }] }), /segurança|bloqueado/i);
