@@ -59,9 +59,13 @@ class UpdateManager(context: Context) {
         require(minimumAppCode <= 2) { "Esta atualização exige uma versão mais recente do aplicativo." }
 
         val current = installedVersion()
+        if (prefs.getString("blocked_version", null) == version) {
+            return UpdateResult(current, emptyList(), "A versão $version foi revertida e está bloqueada até a publicação de uma versão mais nova.")
+        }
         if (compareVersions(version, current) <= 0) {
             return UpdateResult(current, emptyList(), "Lucky já está atualizado (pacote $current).")
         }
+        prefs.edit().remove("blocked_version").apply()
 
         val entries = manifest.optJSONArray("files")
             ?: throw IllegalArgumentException("Manifesto sem lista de arquivos.")
@@ -76,6 +80,7 @@ class UpdateManager(context: Context) {
             mkdirs()
         }
         val validated = mutableListOf<Pair<File, File>>()
+        var applied = false
         try {
             for (index in 0 until entries.length()) {
                 val entry = entries.getJSONObject(index)
@@ -106,21 +111,36 @@ class UpdateManager(context: Context) {
                 validated += stagedFile to targetFile
             }
 
+            val rollbackEntries = org.json.JSONArray()
+            validated.forEachIndexed { index, pair ->
+                val targetFile = pair.second
+                targetFile.parentFile?.mkdirs()
+                val existed = targetFile.exists()
+                if (existed) {
+                    val backupFile = safeFile(backup, index.toString())
+                    backupFile.parentFile?.mkdirs()
+                    check(targetFile.copyTo(backupFile, overwrite = true).exists())
+                }
+                val relative = targetFile.relativeTo(runtimeRoot).path.replace(File.separatorChar, '/')
+                rollbackEntries.put(JSONObject().put("path", "runtime/" + relative).put("existed", existed))
+            }
+            JSONObject()
+                .put("previousVersion", current)
+                .put("targetVersion", version)
+                .put("files", rollbackEntries)
+                .also { File(backup, "rollback.json").writeText(it.toString(), Charsets.UTF_8) }
+
             val replaced = mutableListOf<Pair<File, File?>>()
             try {
                 validated.forEachIndexed { index, pair ->
                     val (stagedFile, targetFile) = pair
-                    val backupFile = safeFile(backup, index.toString())
-                    targetFile.parentFile?.mkdirs()
-                    val previous = if (targetFile.exists()) {
-                        backupFile.parentFile?.mkdirs()
-                        check(targetFile.copyTo(backupFile, overwrite = true).exists())
-                        backupFile
-                    } else null
+                    val existed = rollbackEntries.getJSONObject(index).getBoolean("existed")
+                    val previous = if (existed) safeFile(backup, index.toString()) else null
                     replaced += targetFile to previous
                     check(stagedFile.copyTo(targetFile, overwrite = true).exists())
                 }
                 prefs.edit().putString("installed_version", version).apply()
+                applied = true
             } catch (error: Exception) {
                 replaced.asReversed().forEach { (target, previous) ->
                     if (previous != null && previous.exists()) previous.copyTo(target, overwrite = true)
@@ -129,12 +149,48 @@ class UpdateManager(context: Context) {
                 throw error
             }
 
-            return UpdateResult(version, validated.map { it.second.relativeTo(runtimeRoot).invariantSeparatorsPath },
-                "Pacote $version instalado e validado. Nenhum código executável foi carregado.")
+            return UpdateResult(version, validated.map { it.second.relativeTo(runtimeRoot).path.replace(File.separatorChar, '/') },
+                "Pacote $version instalado e validado. A versão anterior ficou disponível para rollback.")
         } finally {
             staging.deleteRecursively()
-            backup.deleteRecursively()
+            if (!applied) backup.deleteRecursively()
         }
+    }
+
+    fun rollbackLastUpdate(): UpdateResult {
+        val backup = File(appContext.filesDir, "lucky-update-backup")
+        val metadata = File(backup, "rollback.json")
+        val current = installedVersion()
+        require(metadata.isFile) { "Não existe uma atualização anterior disponível para reverter." }
+        val root = JSONObject(metadata.readText(Charsets.UTF_8))
+        val previousVersion = root.getString("previousVersion")
+        val targetVersion = root.getString("targetVersion")
+        val entries = root.getJSONArray("files")
+        val restored = mutableListOf<String>()
+        for (index in entries.length() - 1 downTo 0) {
+            val entry = entries.getJSONObject(index)
+            val path = entry.getString("path")
+            require(path.startsWith("runtime/") && path.endsWith(".json") &&
+                !path.contains("..") && !path.contains("\\") && !path.startsWith("/")) {
+                "Metadados de rollback inválidos."
+            }
+            val target = safeFile(runtimeRoot, path.removePrefix("runtime/"))
+            if (entry.getBoolean("existed")) {
+                val saved = safeFile(backup, index.toString())
+                require(saved.isFile) { "Backup ausente para $path." }
+                target.parentFile?.mkdirs()
+                saved.copyTo(target, overwrite = true)
+            } else {
+                target.delete()
+            }
+            restored += path
+        }
+        prefs.edit()
+            .putString("installed_version", previousVersion)
+            .putString("blocked_version", targetVersion)
+            .apply()
+        backup.deleteRecursively()
+        return UpdateResult(previousVersion, restored, "Rollback concluído: $current -> $previousVersion. A versão $targetVersion não será reaplicada.")
     }
 
     private fun safeFile(root: File, relative: String): File {
